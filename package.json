@@ -1,0 +1,34 @@
+{
+  "name": "agent-evolution-daemon",
+  "version": "0.2.0",
+  "private": true,
+  "description": "AED v2 = Evolution Kernel 资源服务（规范 §5 四接口：experiences/solutions/analyze/verify）+ K6 回溯式评估脚手架（零第三方依赖）",
+  "bin": {
+    "aed": "bin/aed.cjs",
+    "aed-resource": "bin/resource-server.cjs",
+    "evolution-eval": "bin/evolution-eval.cjs"
+  },
+  "main": "src/index.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "start": "node bin/aed.cjs run",
+    "once": "node bin/aed.cjs once",
+    "resource": "node bin/resource-server.cjs serve",
+    "eval": "node bin/evolution-eval.cjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "agent",
+    "evolution",
+    "self-evolving",
+    "resource-service",
+    "evaluation",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

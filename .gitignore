@@ -1,0 +1,33 @@
+# ============================================================
+# agent-evolution 开源发布 .gitignore
+# 原则：代码 / 固定件(fixtures) / 契约文档 入库；
+#       运行期数据、临时调试残留、密钥 一律不进版本库。
+# ============================================================
+
+# 运行期数据（全部可重建，不进版本库）
+runtime/
+
+# QA 临时对抗文件 / 日志备份（不进仓）
+qa-scratch/
+
+# 依赖
+node_modules/
+
+# 日志与临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 密钥（绝不入库）
+runtime/state/keys/
+*.pem
+*.key
+
+# 编辑器
+.vscode/
+.idea/
+
+# kernel 目录顶层调试残留（此前跑测试留下的 full-err.log / probe-*.txt / run-status.txt 等）
+kernel/*.txt
+kernel/*.log

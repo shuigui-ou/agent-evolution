@@ -1,0 +1,4 @@
+# 运行期数据只留在库内部，不入版本库
+runtime/
+node_modules/
+*.log

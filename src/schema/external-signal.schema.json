@@ -1,0 +1,71 @@
+{
+  "$id": "aed:schema/external-signal/1.0",
+  "title": "ExternalSignal",
+  "type": "object",
+  "required": ["schema", "id", "ts", "source", "kind", "payload", "trust_level", "status", "received_at"],
+  "properties": {
+    "schema": { "const": "aed/external-signal/1.0" },
+    "id": { "type": "string", "pattern": "^xs_[0-9a-z]{16,}$" },
+    "ts": { "type": "string" },
+    "received_at": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["peer_pitfall", "community_registry", "upstream_change", "benchmark", "human_feedback"] },
+        "url": { "type": ["string", "null"] },
+        "registry_version": {}
+      }
+    },
+    "kind": { "enum": ["pitfall", "guardrail", "skill", "testcase", "env_fact", "deprecation", "feedback"] },
+    "contributor": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "pubkey": { "type": ["string", "null"] },
+        "reputation_hint": { "type": ["number", "null"] },
+        "contact": { "type": ["string", "null"] }
+      }
+    },
+    "payload": { "type": "object" },
+    "repro": { "type": ["object", "null"] },
+    "dedupe": {
+      "type": "object",
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "simhash": { "type": "string" }
+      }
+    },
+    "signature": {
+      "type": ["object", "null"],
+      "required": ["alg", "pubkey", "sig"],
+      "properties": {
+        "alg": { "const": "ed25519" },
+        "pubkey": { "type": "string" },
+        "sig": { "type": "string" }
+      }
+    },
+    "trust_level": { "enum": ["T0", "T1", "T2", "T3"] },
+    "status": { "enum": ["new", "triaged", "gated", "canary", "merged", "rejected", "needs_repro", "duplicate", "quarantined"] },
+    "decision": {
+      "type": ["object", "null"],
+      "properties": {
+        "reason_code": { "type": "string" },
+        "reason_text": { "type": "string" },
+        "decided_at": { "type": "string" },
+        "gate_result_id": { "type": ["string", "null"] },
+        "adopted_experience_id": { "type": ["string", "null"] }
+      }
+    },
+    "notify": {
+      "type": "object",
+      "properties": {
+        "receipt_sent": { "type": "boolean" },
+        "sent_at": { "type": ["string", "null"] },
+        "channel": { "type": "string" }
+      }
+    }
+  }
+}

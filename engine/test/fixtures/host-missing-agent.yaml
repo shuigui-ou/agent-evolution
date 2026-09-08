@@ -1,0 +1,10 @@
+# 缺 meta.agent 的坏 yaml（schema 校验应拒绝）
+schema: 1
+meta:
+  version: 0.1.0
+kernel:
+  dataDir: data/evolution
+  level: auto_report
+knowledge:
+  root: data/evolution/knowledge
+  whitelist: [errors.jsonl]

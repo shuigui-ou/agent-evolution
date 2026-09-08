@@ -1,0 +1,5 @@
+{"id":"PRB-A-1","experience_id":"expA","outcome":"hit_solved","score":5,"effective":true,"session_id":"s-A2","task_id":"task-A2","note":"复发时注入经验生效，一次解决","ts":"2026-09-05T10:00:10.000Z"}
+{"id":"PRB-B-1","experience_id":"expB","outcome":"hit_invalid","score":-3,"effective":false,"session_id":"s-B2","task_id":"task-B2","note":"首次尝试未解决","ts":"2026-08-20T08:00:00.000Z"}
+{"id":"PRB-B-2","experience_id":"expB","outcome":"hit_solved","score":5,"effective":false,"session_id":"s-B2","task_id":"task-B2","note":"按注入流程修正后解决","ts":"2026-08-22T08:00:00.000Z"}
+{"id":"PRB-D-1","experience_id":"expD","outcome":"hit_solved","score":5,"effective":true,"session_id":"s-D1","task_id":"task-D1","note":"超时路径使用分块+超时经验，解决","ts":"2026-09-02T11:12:00.000Z"}
+{"id":"PRB-C-1","experience_id":"expC","outcome":"miss","score":-1,"effective":false,"session_id":"s-C2","task_id":"task-C2","note":"悬挂复发但注入经验未被调用","ts":"2026-09-10T09:00:00.000Z"}

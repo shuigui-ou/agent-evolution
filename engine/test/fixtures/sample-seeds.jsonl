@@ -1,0 +1,2 @@
+{"skeleton":"fetch failed","category":"AI_调用失败","symptom":"流式生成返回 fetch failed","rootCause":"无效 key / 网络不可达","fix":"校验 key 后 fallback 本地模型","verify":"坏 key 触发 fallback 且同骨架不再复现","expectedGain":0.3,"source":"fixture","credit":1,"confidence":"high"}
+{"skeleton":"AI 返回非 JSON","category":"格式错误","symptom":"JSON 解析失败","rootCause":"输出夹杂 markdown 围栏","fix":"剥离围栏后重试","verify":"围栏 fixture 解析通过","expectedGain":0.2,"source":"fixture","credit":1,"confidence":"high"}

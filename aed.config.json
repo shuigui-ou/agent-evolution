@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "root": ".",
+  "daemon": {
+    "port": 7878,
+    "tickMs": 5000,
+    "digestAt": "09:00",
+    "logLevel": "info"
+  },
+  "agents": [],
+  "evidence": {
+    "l1TtlDays": 30,
+    "l2TtlDays": 180,
+    "minSupportForProposal": 2,
+    "promotion": {
+      "minSupport": 5,
+      "minCredit": 60,
+      "minTriggerStability": 0.7
+    }
+  },
+  "gate": {
+    "regressionSuite": "fixtures/suites/software-verifier.json",
+    "syntheticMinCases": 3,
+    "shadowCalls": 30,
+    "sandbox": true,
+    "timeoutMs": 30000
+  },
+  "canary": {
+    "steps": [10, 50, 100],
+    "minCallsPerStep": 20
+  },
+  "credit": {
+    "init": 50,
+    "decayPerWeek": 0.97,
+    "freezeBelow": 20,
+    "quarantineDays": 90,
+    "hitSuccess": 5,
+    "hitNoop": -3,
+    "falseTrigger": -8,
+    "miss": -1,
+    "rollbackPenalty": -20
+  },
+  "budget": {
+    "maxItems": 40,
+    "maxTokens": 8000
+  },
+  "external": {
+    "trustInit": {
+      "T0": 55,
+      "T1": 52,
+      "T2": 48,
+      "T3": 40
+    },
+    "autoMerge": {
+      "T0": true,
+      "T1": true,
+      "T2": "afterQuarantine7d",
+      "T3": false
+    },
+    "registries": [],
+    "notify": {
+      "spool": true,
+      "digest": true,
+      "toast": false,
+      "webhook": null
+    },
+    "identity": {
+      "contributorId": "local.user",
+      "privKeyPath": "runtime/state/keys/ed25519.pem"
+    }
+  },
+  "llm": {
+    "enabled": false,
+    "provider": "none",
+    "model": "",
+    "apiKeyEnv": "AED_LLM_KEY"
+  },
+  "resource": {
+    "port": 7879,
+    "host": "127.0.0.1",
+    "storeDir": "runtime/resources",
+    "seedsDir": "fixtures/solution-seeds"
+  },
+  "eval": {
+    "dataDir": "fixtures/eval",
+    "outDir": "runtime/reports"
+  }
+}

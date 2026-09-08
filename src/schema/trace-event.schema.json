@@ -1,0 +1,59 @@
+{
+  "$id": "aed:schema/trace-event/1.0",
+  "title": "TraceEvent",
+  "type": "object",
+  "required": ["schema", "id", "ts", "agent", "session_id", "seq", "kind", "payload"],
+  "properties": {
+    "schema": { "const": "aed/trace-event/1.0" },
+    "id": { "type": "string", "pattern": "^te_[0-9a-z]{16,}$" },
+    "ts": { "type": "string" },
+    "agent": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "agent_version": { "type": "string" },
+    "session_id": { "type": "string" },
+    "task_id": { "type": "string" },
+    "seq": { "type": "integer", "minimum": 0 },
+    "parent_id": { "type": ["string", "null"] },
+    "kind": {
+      "enum": ["task_start", "tool_call", "tool_result", "llm_call", "llm_result", "assert", "error", "warn", "metric", "human_feedback", "task_end"]
+    },
+    "payload": { "type": "object" },
+    "outcome": { "enum": ["success", "fail", "timeout", "aborted", "unknown"] },
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "type": { "type": "string" },
+        "message": { "type": "string", "maxLength": 4000 },
+        "stack": { "type": "string", "maxLength": 8000 },
+        "category": { "enum": ["tool", "planning", "reasoning", "knowledge", "environment", "unknown"] }
+      }
+    },
+    "env": {
+      "type": "object",
+      "properties": {
+        "os": { "type": "string" },
+        "node": { "type": "string" },
+        "arch": { "type": "string" },
+        "cwd": { "type": "string" },
+        "locale": { "type": "string" }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "properties": {
+        "in": { "type": "integer" },
+        "out": { "type": "integer" },
+        "ctx": { "type": "integer" }
+      }
+    },
+    "cost_ms": { "type": "integer", "minimum": 0 },
+    "source": {
+      "type": "object",
+      "properties": {
+        "adapter": { "type": "string" },
+        "path": { "type": "string" },
+        "line": { "type": "integer" }
+      }
+    },
+    "redacted": { "type": "boolean" }
+  }
+}

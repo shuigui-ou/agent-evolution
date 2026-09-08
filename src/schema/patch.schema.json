@@ -1,0 +1,65 @@
+{
+  "$id": "aed:schema/patch/1.0",
+  "title": "Patch",
+  "type": "object",
+  "required": ["schema", "id", "target", "ops", "risk"],
+  "properties": {
+    "schema": { "const": "aed/patch/1.0" },
+    "id": { "type": "string", "pattern": "^pt_[0-9a-z]{16,}$" },
+    "target": {
+      "type": "object",
+      "required": ["agent", "artifact", "path", "version"],
+      "properties": {
+        "agent": { "type": "string" },
+        "artifact": { "type": "string" },
+        "path": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "ops": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "enum": ["append_section", "replace_regex", "upsert_frontmatter", "add_file", "deprecate"] },
+          "anchor": { "type": "string" },
+          "pattern": { "type": "string" },
+          "replacement": { "type": "string" },
+          "content": { "type": "string", "maxLength": 8000 },
+          "path": { "type": "string" },
+          "key": { "type": "string" },
+          "value": {}
+        }
+      }
+    },
+    "testcases": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["id", "expect_trigger"],
+        "properties": {
+          "id": { "type": "string" },
+          "expect_trigger": { "type": "boolean" },
+          "input": { "type": "object" },
+          "expect_fix_kind": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "required": ["level", "requires_human"],
+      "properties": {
+        "level": { "enum": ["low", "medium", "high"] },
+        "blast_radius": { "type": "string" },
+        "requires_human": { "type": "boolean" },
+        "human_reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "reverse_ops": { "type": "array", "items": { "type": "object" } },
+    "created_by": { "type": "string" }
+  }
+}

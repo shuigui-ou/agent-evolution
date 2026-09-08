@@ -1,0 +1,22 @@
+{
+  "name": "evolution-engine",
+  "version": "1.0.0",
+  "description": "共享进化引擎加载器（零依赖 CommonJS）：evolution.yaml → engine.load → 统一 handle（数据即接入）",
+  "main": "engine.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agent",
+    "evolution",
+    "engine",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "private": true,
+  "dependencies": {}
+}

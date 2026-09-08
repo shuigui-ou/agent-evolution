@@ -1,0 +1,674 @@
+{
+  "schema": "aed/suite/1.0",
+  "agent": "software-verifier",
+  "version": "1.0.0",
+  "description": "software-verifier 黄金回归集（24）+ 合成用例（12）",
+  "cases": [
+    {
+      "id": "golden-001",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "launch failed",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "error_type 精确命中"
+    },
+    {
+      "id": "golden-002",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "mismatch",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "error_type 不匹配"
+    },
+    {
+      "id": "golden-003",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "Timeout \\d+ms exceeded"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "Timeout 30000ms exceeded",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "message_regex 命中"
+    },
+    {
+      "id": "golden-004",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "Timeout \\d+ms exceeded"
+        ]
+      },
+      "input": {
+        "error_type": "Error",
+        "message": "ECONNREFUSED 127.0.0.1:443",
+        "tool": "fetch",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "message_regex 未命中"
+    },
+    {
+      "id": "golden-005",
+      "kind": "golden",
+      "conditions": {
+        "tool": [
+          "playwright"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "tool 命中"
+    },
+    {
+      "id": "golden-006",
+      "kind": "golden",
+      "conditions": {
+        "os": [
+          "win32"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "os 命中"
+    },
+    {
+      "id": "golden-007",
+      "kind": "golden",
+      "conditions": {
+        "keywords": [
+          "timeout"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "browser launch timeout",
+        "tool": "playwright",
+        "os": "win32",
+        "text": ""
+      },
+      "expect_trigger": true,
+      "note": "keywords 命中（任一）"
+    },
+    {
+      "id": "golden-008",
+      "kind": "golden",
+      "conditions": {
+        "keywords": [
+          "timeout"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "all good",
+        "tool": "playwright",
+        "os": "win32",
+        "text": ""
+      },
+      "expect_trigger": false,
+      "note": "keywords 未命中"
+    },
+    {
+      "id": "golden-009",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "ECONNREFUSED",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "neg_match 抑制触发",
+      "neg_match": {
+        "message_regex": [
+          "ECONNREFUSED"
+        ]
+      }
+    },
+    {
+      "id": "golden-010",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ],
+        "tool": [
+          "playwright"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "多字段 AND 命中"
+    },
+    {
+      "id": "golden-011",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ],
+        "tool": [
+          "playwright"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "curl",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "多字段 AND 有一项不满足"
+    },
+    {
+      "id": "golden-012",
+      "kind": "golden",
+      "conditions": {
+        "file_glob": [
+          "*.json"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "",
+        "os": "win32",
+        "file": "report.json"
+      },
+      "expect_trigger": true,
+      "note": "file_glob 命中"
+    },
+    {
+      "id": "golden-013",
+      "kind": "golden",
+      "conditions": {
+        "version_range": ">=22.0.0"
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "",
+        "os": "win32",
+        "version": "v22.22.2"
+      },
+      "expect_trigger": true,
+      "note": "version_range 命中"
+    },
+    {
+      "id": "golden-014",
+      "kind": "golden",
+      "conditions": {
+        "version_range": ">=23.0.0"
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "",
+        "os": "win32",
+        "version": "v22.22.2"
+      },
+      "expect_trigger": false,
+      "note": "version_range 未命中"
+    },
+    {
+      "id": "golden-015",
+      "kind": "golden",
+      "conditions": {},
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "空条件不触发"
+    },
+    {
+      "id": "golden-016",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "launch: Timeout \\d+ms"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "browserType.launch: Timeout 45000ms exceeded",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "数字归一化正则"
+    },
+    {
+      "id": "golden-017",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "SELECTOR ENGINE .CSS. IS DEPRECATED"
+        ]
+      },
+      "input": {
+        "error_type": "SelectorError",
+        "message": "selector engine 'css' is deprecated",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "正则大小写不敏感"
+    },
+    {
+      "id": "golden-018",
+      "kind": "golden",
+      "conditions": {
+        "tool": [
+          "playwright",
+          "assert"
+        ],
+        "os": [
+          "win32"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "x",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "数组内 OR + 字段间 AND"
+    },
+    {
+      "id": "golden-019",
+      "kind": "golden",
+      "conditions": {
+        "keywords": [
+          "deprecated",
+          "renamed"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "api renamed",
+        "tool": "",
+        "os": "win32",
+        "text": ""
+      },
+      "expect_trigger": true,
+      "note": "keywords 任一命中"
+    },
+    {
+      "id": "golden-020",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "AssertionError"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "unrelated stuff",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "neg_match 多条件抑制（补：显式声明 neg_match）",
+      "neg_match": {
+        "error_type": [
+          "AssertionError"
+        ],
+        "keywords": [
+          "unrelated"
+        ]
+      }
+    },
+    {
+      "id": "golden-021",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "browserType\\.launch"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "browserType.launch start",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "转义点号"
+    },
+    {
+      "id": "golden-022",
+      "kind": "golden",
+      "conditions": {
+        "message_regex": [
+          "^expected"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "expected A to equal B",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "起始锚点"
+    },
+    {
+      "id": "golden-023",
+      "kind": "golden",
+      "conditions": {
+        "os": [
+          "linux"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "os 不匹配"
+    },
+    {
+      "id": "golden-024",
+      "kind": "golden",
+      "conditions": {
+        "error_type": [
+          "AssertionError"
+        ],
+        "message_regex": [
+          "CRLF"
+        ],
+        "keywords": [
+          "crlf"
+        ],
+        "os": [
+          "win32"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "CRLF mismatch detected",
+        "tool": "assert",
+        "os": "win32",
+        "text": "crlf"
+      },
+      "expect_trigger": true,
+      "note": "环境类全字段命中"
+    },
+    {
+      "id": "syn-001",
+      "kind": "synthetic",
+      "conditions": {
+        "error_type": [
+          "SelectorError"
+        ],
+        "message_regex": [
+          "deprecated"
+        ]
+      },
+      "input": {
+        "error_type": "SelectorError",
+        "message": "selector engine 'css' is deprecated",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "正向：选择器废弃"
+    },
+    {
+      "id": "syn-002",
+      "kind": "synthetic",
+      "conditions": {
+        "error_type": [
+          "SelectorError"
+        ],
+        "message_regex": [
+          "deprecated"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "Timeout 1ms exceeded",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "负向：类型不符"
+    },
+    {
+      "id": "syn-003",
+      "kind": "synthetic",
+      "conditions": {
+        "keywords": [
+          "crlf"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "CRLF",
+        "tool": "assert",
+        "os": "win32",
+        "text": "CRLF"
+      },
+      "expect_trigger": true,
+      "note": "正向：CRLF 关键词"
+    },
+    {
+      "id": "syn-004",
+      "kind": "synthetic",
+      "conditions": {
+        "keywords": [
+          "crlf"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "LF only",
+        "tool": "assert",
+        "os": "win32",
+        "text": "LF only"
+      },
+      "expect_trigger": false,
+      "note": "负向：无 CRLF"
+    },
+    {
+      "id": "syn-005",
+      "kind": "synthetic",
+      "conditions": {
+        "tool": [
+          "assert"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "正向：工具命中"
+    },
+    {
+      "id": "syn-006",
+      "kind": "synthetic",
+      "conditions": {
+        "tool": [
+          "assert"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "负向：工具不符"
+    },
+    {
+      "id": "syn-007",
+      "kind": "synthetic",
+      "conditions": {
+        "os": [
+          "win32"
+        ],
+        "keywords": [
+          "encoding"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "utf-8 encoding problem",
+        "tool": "",
+        "os": "win32",
+        "text": ""
+      },
+      "expect_trigger": true,
+      "note": "正向：win32 + 编码"
+    },
+    {
+      "id": "syn-008",
+      "kind": "synthetic",
+      "conditions": {
+        "os": [
+          "win32"
+        ],
+        "keywords": [
+          "encoding"
+        ]
+      },
+      "input": {
+        "error_type": "",
+        "message": "utf-8 encoding problem",
+        "tool": "",
+        "os": "linux",
+        "text": ""
+      },
+      "expect_trigger": false,
+      "note": "负向：os 不符"
+    },
+    {
+      "id": "syn-009",
+      "kind": "synthetic",
+      "conditions": {
+        "message_regex": [
+          "\\d+ms exceeded"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "Timeout 30000ms exceeded",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "正向：数字通配"
+    },
+    {
+      "id": "syn-010",
+      "kind": "synthetic",
+      "conditions": {
+        "message_regex": [
+          "\\d+ms exceeded"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "No timeout here",
+        "tool": "playwright",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "负向：无超时描述"
+    },
+    {
+      "id": "syn-011",
+      "kind": "synthetic",
+      "conditions": {
+        "error_type": [
+          "TimeoutError"
+        ]
+      },
+      "input": {
+        "error_type": "TimeoutError",
+        "message": "x",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": false,
+      "note": "负向：neg_match 工具抑制",
+      "neg_match": {
+        "tool": [
+          "assert"
+        ]
+      }
+    },
+    {
+      "id": "syn-012",
+      "kind": "synthetic",
+      "conditions": {
+        "error_type": [
+          "TimeoutError",
+          "AssertionError"
+        ]
+      },
+      "input": {
+        "error_type": "AssertionError",
+        "message": "x",
+        "tool": "assert",
+        "os": "win32"
+      },
+      "expect_trigger": true,
+      "note": "正向：类型数组任一"
+    }
+  ]
+}

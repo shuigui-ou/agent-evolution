@@ -1,0 +1,34 @@
+# engine 正常装配测试用 host（结构镜像 ai-novel-studio 接入面）
+schema: 1
+meta:
+  agent: engine-fixture-host
+  version: 0.1.0
+kernel:
+  dataDir: data/evolution
+  level: auto_report
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]
+  enabled: true
+knowledge:
+  root: data/evolution/knowledge
+  whitelist:
+    - errors.jsonl
+    - fixes.md
+    - notes
+seeds:
+  source: seeds/sample.jsonl
+  fileName: engine-fixture-host.seeds.jsonl
+objectives:
+  - title: 压制 AI 调用/解析类错误复发率 RR≤5%
+    types: [E]
+    weight: 5
+  - title: 长任务不再悬挂
+    types: [I]
+    weight: 4
+signals:
+  source: tap
+  triggers: [post-run, http, manual]
+server:
+  enabled: true
+  prefix: /api/evolution

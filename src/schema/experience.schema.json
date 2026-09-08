@@ -1,0 +1,88 @@
+{
+  "$id": "aed:schema/experience/1.0",
+  "title": "Experience",
+  "type": "object",
+  "required": ["schema", "id", "type", "fingerprint", "trigger", "fix", "status", "credit", "origin", "version", "created_at"],
+  "properties": {
+    "schema": { "const": "aed/experience/1.0" },
+    "id": { "type": "string", "pattern": "^exp_[0-9a-z]{16,}$" },
+    "type": { "enum": ["pitfall", "guardrail", "strategy", "env_fact"] },
+    "layer": { "enum": ["L2", "L3"] },
+    "fingerprint": { "type": "string", "minLength": 8, "maxLength": 64 },
+    "simhash": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "title": { "type": "string", "maxLength": 120 },
+    "trigger": {
+      "type": "object",
+      "required": ["category", "match"],
+      "properties": {
+        "category": { "enum": ["tool", "planning", "reasoning", "knowledge", "environment"] },
+        "match": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "error_type": { "type": "array", "items": { "type": "string" } },
+            "message_regex": { "type": "array", "items": { "type": "string" } },
+            "tool": { "type": "array", "items": { "type": "string" } },
+            "os": { "type": "array", "items": { "type": "string" } },
+            "version_range": { "type": "string" },
+            "file_glob": { "type": "array", "items": { "type": "string" } },
+            "keywords": { "type": "array", "items": { "type": "string" }, "maxItems": 12 }
+          }
+        },
+        "neg_match": { "type": "object" }
+      }
+    },
+    "symptom": { "type": "string", "maxLength": 500 },
+    "fix": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["constraint", "retry", "fallback", "patch_script", "env_requirement", "abort"] },
+        "text": { "type": "string", "maxLength": 2000 },
+        "steps": { "type": "array", "items": { "type": "string" }, "maxItems": 12 },
+        "patch_ref": { "type": ["string", "null"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "evidence_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 50 },
+    "repro": {
+      "type": ["object", "null"],
+      "properties": {
+        "command": { "type": "string", "maxLength": 500 },
+        "expect": { "type": "string", "maxLength": 500 },
+        "artifact": { "type": ["string", "null"] }
+      }
+    },
+    "status": { "enum": ["candidate", "gated", "canary", "active", "disputed", "frozen", "quarantined", "purged"] },
+    "credit": { "type": "number", "minimum": 0, "maximum": 100 },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "support_count": { "type": "integer" },
+        "hit": { "type": "integer" },
+        "hit_success": { "type": "integer" },
+        "false_trigger": { "type": "integer" },
+        "miss": { "type": "integer" },
+        "trigger_stability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "last_hit_at": { "type": ["string", "null"] }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "required": ["channel"],
+      "properties": {
+        "channel": { "enum": ["self_distill", "peer_share", "community_registry", "upstream_change", "benchmark", "human"] },
+        "contributor_id": { "type": ["string", "null"] },
+        "signal_id": { "type": ["string", "null"] },
+        "trust_level": { "enum": ["T0", "T1", "T2", "T3"] }
+      }
+    },
+    "applies_to": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "supersedes": { "type": ["string", "null"] },
+    "superseded_by": { "type": ["string", "null"] },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "ttl_days": { "type": "integer" }
+  }
+}

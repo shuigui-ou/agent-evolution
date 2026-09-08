@@ -1,0 +1,65 @@
+{
+  "$id": "aed:schema/proposal/1.0",
+  "title": "EvolutionProposal",
+  "type": "object",
+  "required": ["schema", "id", "created_at", "agent", "trigger", "attribution", "state"],
+  "properties": {
+    "schema": { "const": "aed/proposal/1.0" },
+    "id": { "type": "string", "pattern": "^pr_[0-9a-z]{16,}$" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "agent": { "type": "string" },
+    "trigger": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["failure", "external_signal", "drift", "manual", "upstream_change"] },
+        "ref_ids": { "type": "array", "items": { "type": "string" } },
+        "fingerprint": { "type": ["string", "null"] }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "required": ["category", "confidence"],
+      "properties": {
+        "category": { "enum": ["tool", "planning", "reasoning", "knowledge", "environment", "unknown"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "rationale": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "intent": { "type": "string", "maxLength": 300 },
+    "patch": { "$ref": "aed:schema/patch/1.0" },
+    "experience_id": { "type": ["string", "null"] },
+    "state": { "enum": ["draft", "gated", "needs_human", "canary", "released", "rolled_back", "rejected", "blocked"] },
+    "gate_result_id": { "type": ["string", "null"] },
+    "canary": {
+      "type": "object",
+      "properties": {
+        "percent": { "type": "integer", "enum": [10, 50, 100] },
+        "min_calls": { "type": "integer" },
+        "observed_calls": { "type": "integer" },
+        "observed_regressions": { "type": "integer" },
+        "abort_on": { "type": "object" }
+      }
+    },
+    "release": {
+      "type": ["object", "null"],
+      "properties": {
+        "version": { "type": "string" },
+        "snapshot_dir": { "type": "string" },
+        "released_at": { "type": "string" }
+      }
+    },
+    "rollback": {
+      "type": ["object", "null"],
+      "properties": {
+        "reason_code": { "type": "string" },
+        "at": { "type": "string" },
+        "restored_from": { "type": "string" }
+      }
+    },
+    "retry_count": { "type": "integer" },
+    "audit_refs": { "type": "array", "items": { "type": "string" } }
+  }
+}

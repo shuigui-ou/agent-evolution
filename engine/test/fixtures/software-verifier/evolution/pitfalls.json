@@ -1,0 +1,8 @@
+[
+  {
+    "id": "fixture-pitfall-1",
+    "category": "显隐/容器",
+    "symptom": "目标元素被遮罩拦截",
+    "fix": "先关遮罩再点击"
+  }
+]

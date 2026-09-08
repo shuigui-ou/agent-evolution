@@ -1,0 +1,51 @@
+{
+  "$id": "aed:schema/gate-result/1.0",
+  "title": "GateResult",
+  "type": "object",
+  "required": ["schema", "id", "proposal_id", "decision", "stages", "ts"],
+  "properties": {
+    "schema": { "const": "aed/gate-result/1.0" },
+    "id": { "type": "string", "pattern": "^gr_[0-9a-z]{16,}$" },
+    "proposal_id": { "type": "string" },
+    "ts": { "type": "string" },
+    "decision": { "enum": ["pass", "fail", "needs_human"] },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "pass"],
+        "properties": {
+          "stage": { "enum": ["G1_static", "G2_regression", "G3_synthetic", "G4_shadow"] },
+          "pass": { "type": "boolean" },
+          "reason_code": { "type": "string" },
+          "detail": { "type": "string", "maxLength": 1000 },
+          "duration_ms": { "type": "integer" },
+          "skipped": { "type": "boolean" }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "regression_total": { "type": "integer" },
+        "regression_passed": { "type": "integer" },
+        "synthetic_total": { "type": "integer" },
+        "synthetic_passed": { "type": "integer" },
+        "shadow_calls": { "type": "integer" },
+        "shadow_regressions": { "type": "integer" },
+        "expected_gain": { "type": "integer" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "token_delta": { "type": "integer" },
+        "skill_bytes": { "type": "integer" },
+        "items_after": { "type": "integer" }
+      }
+    },
+    "requires_human": { "type": "boolean" },
+    "human_reasons": { "type": "array", "items": { "type": "string" } },
+    "sandboxed": { "type": "boolean" }
+  }
+}

@@ -1,0 +1,5 @@
+schema: 1
+meta:
+	agent: bad-yaml-host
+kernel:
+	dataDir: data/evolution

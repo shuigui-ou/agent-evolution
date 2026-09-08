@@ -1,0 +1,15 @@
+# 统一 LF 行尾：保证跨平台（尤其 Windows）检出一致、测试字节级可复现
+* text=auto
+
+*.cjs   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.jsonl text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+LICENSE        text eol=lf

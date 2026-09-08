@@ -1,0 +1,21 @@
+{
+  "name": "evolution-kernel",
+  "version": "1.1.0",
+  "description": "P4 进化内核运行时（零依赖 CommonJS）：八步状态机 + 承诺账本 + 权限旋钮 + 审计/回滚",
+  "main": "src/index.cjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs"
+  },
+  "keywords": [
+    "agent",
+    "evolution",
+    "kernel",
+    "zero-dependency"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "private": true,
+  "dependencies": {}
+}

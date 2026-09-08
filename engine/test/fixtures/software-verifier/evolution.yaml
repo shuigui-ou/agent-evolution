@@ -1,0 +1,30 @@
+# software-verifier（Host B）接入声明：knowledge 白名单 = evolution/pitfalls.json + evolution/learnings.jsonl
+schema: 1
+meta:
+  agent: software-verifier
+  version: 0.1.0
+kernel:
+  dataDir: .evolution
+  level: auto_report
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]
+  enabled: true
+knowledge:
+  # knowledge root 相对 evolution.yaml 所在目录（skill 根）→ <skill>/evolution/
+  root: evolution
+  whitelist:
+    - pitfalls.json
+    - learnings.jsonl
+objectives:
+  - title: 压制验证失败复现率（同一失败模式不再反复出现）
+    types: [E]
+    weight: 5
+seeds: {}
+signals:
+  source: result.json
+  pointer: /features
+  triggers: [post-run, manual]
+server:
+  enabled: true
+  prefix: /api/evolution

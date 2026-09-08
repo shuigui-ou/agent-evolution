@@ -1,0 +1,73 @@
+{
+  "schema": "aed/patch-templates/1.0",
+  "version": "1.0.0",
+  "note": "初始规则从 software-verifier/evolve.cjs 的 inferFix(category, ae, patterns) 迁移并泛化",
+  "templates": {
+    "tool": {
+      "fix_kind": "fallback",
+      "anchor": "## 已知坑 / Pitfalls",
+      "title": "工具调用失败：{error_type}",
+      "content": "### [{fingerprint}] {title}\n\n- **现象**：{symptom}\n- **归因**：tool（置信度 {confidence}）\n- **处置**：\n{steps}\n- **验证**：`{repro_command}` → 期望 `{repro_expect}`\n",
+      "steps": [
+        "先做前置检查：目标进程/端口/路径是否可用，权限是否足够",
+        "为命令显式设置超时，超时后切换备用工具或降级路径",
+        "同一任务内重试不超过 2 次，第 3 次失败即上报并终止该分支"
+      ],
+      "extra_ops": []
+    },
+    "planning": {
+      "fix_kind": "constraint",
+      "anchor": "## 已知坑 / Pitfalls",
+      "title": "规划失控：{error_type}",
+      "content": "### [{fingerprint}] {title}\n\n- **现象**：{symptom}\n- **归因**：planning（置信度 {confidence}）\n- **约束**：\n{steps}\n",
+      "steps": [
+        "单任务工具调用总数设上限（默认 12 次），超出即终止并复盘",
+        "参数等价的重复调用不得超过 3 次",
+        "检测到 A→B→A 回环立即改换策略"
+      ],
+      "extra_ops": []
+    },
+    "reasoning": {
+      "fix_kind": "constraint",
+      "anchor": "## 已知坑 / Pitfalls",
+      "title": "结果解析/断言失败：{error_type}",
+      "content": "### [{fingerprint}] {title}\n\n- **现象**：{symptom}\n- **归因**：reasoning（置信度 {confidence}）\n- **约束**：\n{steps}\n",
+      "steps": [
+        "强制先输出 JSON 代码块，再输出其它文字",
+        "解析失败时重试一次，并附上原始片段便于定位",
+        "断言失败但工具全成功时，判定为推理错误，不要重试工具"
+      ],
+      "extra_ops": []
+    },
+    "knowledge": {
+      "fix_kind": "patch_script",
+      "anchor": "## 已知坑 / Pitfalls",
+      "title": "知识点变更：{error_type}",
+      "content": "### [{fingerprint}] {title}\n\n- **现象**：{symptom}\n- **归因**：knowledge（置信度 {confidence}）\n- **处置**：\n{steps}\n",
+      "steps": [
+        "动手前先确认当前版本与官方迁移说明",
+        "改用最新 API / 选择器，并同步更新本地示例",
+        "在脚本中加版本探测，版本不匹配时给出明确报错"
+      ],
+      "extra_ops": []
+    },
+    "environment": {
+      "fix_kind": "env_requirement",
+      "anchor": "## 环境要求 / Environment",
+      "title": "环境依赖：{error_type}",
+      "content": "### [{fingerprint}] {title}\n\n- **现象**：{symptom}\n- **归因**：environment（置信度 {confidence}）\n- **前置要求**：\n{steps}\n",
+      "steps": [
+        "统一换行符为 LF（git core.autocrlf=input），比较文本前先规范化",
+        "所有文件读写显式声明 UTF-8 编码",
+        "路径一律使用 path.join / path.resolve，禁止字符串拼接"
+      ],
+      "extra_ops": [
+        {
+          "op": "upsert_frontmatter",
+          "key": "requires",
+          "value_from": "env_requirement"
+        }
+      ]
+    }
+  }
+}
