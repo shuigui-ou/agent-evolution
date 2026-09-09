@@ -58,6 +58,8 @@ probe 回填、report 落盘……其中 90% 与"这个宿主是 ai-novel-studio
 | `behavior.windowSize`     | int      |    | 行为贴合层：偏好推断滑动窗口（默认 20 条观察）                                                  |
 | `behavior.minEvidence`    | int      |    | 行为贴合层：形成稳定偏好的最少多数票数（默认 3）                                                |
 | `behavior.confidence`     | number   |    | 行为贴合层：多数方向置信度阈值 (0,1]（默认 0.6）                                            |
+| `behavior.keywords`       | object   |    | 行为贴合层：域词表声明式注入（只扩词、不扩维度/方向；缺省=内核内置通用词表，见 §1.3.1）                 |
+| `outcome.*`               | int      |    | 出口选择环阈值：`confirmToStrengthen`/`refuteToDecay`/`refuteToRetire`/`survivalWindow`（默认 3/2/3/3，见 §1.4） |
 | `server.enabled`          | bool     |    | 是否声明 HTTP 端点面（默认 false）                                                      |
 | `server.prefix`           | string   |    | HTTP API 前缀（默认 `/api/evolution`）                                             |
 
@@ -116,6 +118,55 @@ handle.behaviorReset('verbosity');    // user 来源清空
 **偏好推断规则**：每维度取最近 `behavior.windowSize` 条观察，多数方向票数 ≥ `behavior.minEvidence` 且占比 ≥ `behavior.confidence` → 该维度稳定（`stable=true`），进入 guidance。
 
 **向后兼容**：`behavior` 段整体可选。旧 evolution.yaml 不写该段 → 引擎按缺省参数装配（windowSize=20/minEvidence=3/confidence=0.6），其余行为零变化。
+
+#### 1.3.1 behavior.keywords 域词表（声明式注入，解决创作/专业域表达失配）
+
+**问题**：内置通用词表从通用工作语料提炼，创作域（如 ai-novel-studio）的多维混合表达（"太单薄了/心理铺垫不够/展开写/扩写"）拆不中维度 → `tapBehavior({text})` 返回 `no_behavior_signal`，偏好无法沉淀。
+
+**方案**：词表迁到适配层声明式注入 —— 宿主在 yaml 里声明自己的域词表，engine 校验后透传给内核 `parseCorrection(text, keywords)`，与内置通用词表**合并**后用于文本启发式解析。
+
+```yaml
+behavior:
+  windowSize: 10
+  minEvidence: 2
+  confidence: 0.5
+  keywords:                    # 可选；结构 = {dimension:{more|less:[词]}}
+    verbosity:
+      more: [展开写, 扩写, 写饱满, 铺陈开]
+      less: []
+    detail:
+      more: [单薄, 太单薄了, 心理铺垫不够, 人物动机不足]
+      less: []
+```
+
+**规则（安全边界，与受控枚举同级）**：
+- **只扩词、不扩维度/方向**：`dimension` 仍只允许 `verbosity|detail|proactivity|pace`，`direction` 仍只允许 `more|less`；结构非法（未知维度/方向/非字符串词）→ `EVOLUTION_SCHEMA_INVALID`；
+- 外部词追加到内置词表（trim + 去重；内置词保留）——**缺省 = 内核内置通用词表，旧 yaml 零影响**；
+- 命中判定与内置词一致：`text.includes(词)` 子串匹配；多维度命中仍取票数最多者。
+
+### 1.4 outcome 出口选择环阈值（v1 增量，可配）
+
+**解决什么**：经验/偏好条目落地后进入"服役考核"（出口选择环）——按注入后的再犯/不再犯自动 强化/衰减/停用。考核判据的四个阈值默认 `3/2/3/3`，以前硬编码在内核 `outcome.cjs`；本段让宿主在 yaml 里覆盖。
+
+| 字段 | 默认 | 语义 |
+| --- | --- | --- |
+| `outcome.confirmToStrengthen` | 3 | `confirmed` 累积 ≥N 且 > `refuted` → `strengthened` |
+| `outcome.refuteToDecay` | 2 | `refuted` ≥N 且 > `confirmed` → `decayed`（停注，指引排除） |
+| `outcome.refuteToRetire` | 3 | `refuted` ≥N 且 > `confirmed` → `retired`（彻底停用，可 revoke 复活） |
+| `outcome.survivalWindow` | 3 | behavior 域：签发后连续 N 条异维纠偏无同维再犯 → 自动 `confirmed` |
+
+```yaml
+outcome:
+  confirmToStrengthen: 3
+  refuteToDecay: 2
+  refuteToRetire: 3
+  survivalWindow: 3
+```
+
+**规则**：
+- `outcome` 段整体可选；四字段均为**正整数**，出现则校验类型/范围，非法 → `EVOLUTION_SCHEMA_INVALID`；
+- 缺省（不写本段或某字段缺省）→ 该阈值 = 内核 `OUTCOME_DEFAULTS`，行为零变化；
+- 阈值作用于 `<dataDir>/outcome/experience.jsonl`（经验 lane 考核）的重放判定；改动后已落地条目按新阈值即时重判（账本为计数 + 实时推导状态）。
 
 ---
 

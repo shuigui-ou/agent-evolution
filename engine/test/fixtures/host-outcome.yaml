@@ -1,0 +1,31 @@
+# engine 出口选择环阈值透传测试用 host（host-good.yaml + outcome 段）
+schema: 1
+meta:
+  agent: engine-outcome-host
+  version: 0.1.0
+kernel:
+  dataDir: data/evolution
+  level: auto_report
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]
+  enabled: true
+knowledge:
+  root: data/evolution/knowledge
+  whitelist:
+    - errors.jsonl
+behavior:
+  windowSize: 10
+  minEvidence: 2
+  confidence: 0.5
+outcome:
+  confirmToStrengthen: 1
+  refuteToDecay: 2
+  refuteToRetire: 3
+  survivalWindow: 3
+objectives:
+  - title: 压制 AI 调用/解析类错误复发率 RR≤5%
+    types: [E]
+    weight: 5
+server:
+  enabled: false

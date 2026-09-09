@@ -29,6 +29,8 @@ const GOOD_YAML = path.join(FIXTURES, 'host-good.yaml');
 const BAD_YAML = path.join(FIXTURES, 'host-bad-syntax.yaml');
 const MISSING_AGENT_YAML = path.join(FIXTURES, 'host-missing-agent.yaml');
 const SV_YAML = path.join(FIXTURES, 'software-verifier', 'evolution.yaml');
+const OUTCOME_YAML = path.join(FIXTURES, 'host-outcome.yaml');
+const KEYWORDS_YAML = path.join(FIXTURES, 'host-behavior-keywords.yaml');
 const SEEDS = path.join(FIXTURES, 'sample-seeds.jsonl');
 
 /** 生成独立临时根目录 */
@@ -194,6 +196,93 @@ test('kernel.level 非法 → EVOLUTION_SCHEMA_INVALID', () => {
       { schema: 1, meta: { agent: 'x' }, kernel: { level: 'super' }, knowledge: { root: 'k', whitelist: ['a.jsonl'] } },
       { rootDir: tmpRoot('level') }
     ),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+});
+
+// ---------------------------------------------------------------- 11. outcome 段：合法阈值透传 / 非法结构拒绝
+test('yaml outcome 段合法 → 装配成功且阈值透传生效（confirmToStrengthen=1，1 次 confirmed 即 strengthened）', () => {
+  const root = tmpRoot('outcome');
+  const h = engine.load(OUTCOME_YAML, { rootDir: root });
+  const m = h.meta();
+  assert.equal(m.ok, true);
+  assert.equal(m.agent, 'engine-outcome-host');
+  assert.equal(m.tier, 'P4');
+  const r = h.reportOutcome({ lane: 'experience', key: 'exp-1', verdict: 'confirmed', source: 'host' });
+  assert.equal(r.ok, true);
+  const st = h.outcomeStatus({ lane: 'experience', key: 'exp-1' });
+  assert.equal(st.ok, true);
+  assert.equal(st.status, 'strengthened'); // 默认需 3 次；阈值=1 → 1 次即强化，证明 cfg.outcome 已透传
+  assert.equal(st.confirmed, 1);
+  assert.equal(h.verifyAudit().ok, true);
+});
+
+test('outcome 段非法（非正整数）→ EVOLUTION_SCHEMA_INVALID', () => {
+  const base = { schema: 1, meta: { agent: 'x' }, knowledge: { root: 'k', whitelist: ['a.jsonl'] } };
+  // 0（非正）
+  assert.throws(
+    () => engine.load({ ...base, outcome: { refuteToRetire: 0 } }, { rootDir: tmpRoot('obad0') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  // 非数
+  assert.throws(
+    () => engine.load({ ...base, outcome: { confirmToStrengthen: 'x' } }, { rootDir: tmpRoot('obad1') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  // 负数
+  assert.throws(
+    () => engine.load({ ...base, outcome: { survivalWindow: -1 } }, { rootDir: tmpRoot('obad2') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  // outcome 非对象
+  assert.throws(
+    () => engine.load({ ...base, outcome: [1, 2] }, { rootDir: tmpRoot('obad3') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+});
+
+// ---------------------------------------------------------------- 12. behavior.keywords 声明式注入：合法装配 / 结构非法拒绝
+test('behavior.keywords 合法 → 装配成功；创作域词表驱动文本解析（无词表 yaml 同文本不命中）', () => {
+  const rootKw = tmpRoot('kw');
+  const h = engine.load(KEYWORDS_YAML, { rootDir: rootKw });
+  const m = h.meta();
+  assert.equal(m.ok, true);
+  assert.equal(m.agent, 'engine-behavior-keywords-host');
+  // 创作域表达（内置通用词表不含"单薄/展开写"）：注入词表后应命中 detail:more
+  const r = h.tapBehavior({ text: '这段太单薄了，展开写' });
+  assert.equal(r.ok, true);
+  assert.equal(r.recorded, true);
+  assert.equal(r.dimension, 'detail');
+  assert.equal(r.direction, 'more');
+  assert.equal(h.verifyAudit().ok, true);
+
+  // 对照：无 keywords 的 host-good.yaml 同一文本 → 拆不中（no_behavior_signal）
+  const rootPlain = tmpRoot('kwplain');
+  const hp = engine.load(GOOD_YAML, { rootDir: rootPlain });
+  const rp = hp.tapBehavior({ text: '这段太单薄了，展开写' });
+  assert.equal(rp.ok, false);
+  assert.equal(rp.reason, 'no_behavior_signal');
+});
+
+test('behavior.keywords 结构非法（未知维度/非法方向/空词）→ EVOLUTION_SCHEMA_INVALID', () => {
+  const base = { schema: 1, meta: { agent: 'x' }, knowledge: { root: 'k', whitelist: ['a.jsonl'] } };
+  // 未知维度
+  assert.throws(
+    () => engine.load({ ...base, behavior: { keywords: { color: { more: ['x'] } } } }, { rootDir: tmpRoot('kwb0') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  // 非法方向
+  assert.throws(
+    () => engine.load({ ...base, behavior: { keywords: { verbosity: { sideways: ['x'] } } } }, { rootDir: tmpRoot('kwb1') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  // 空词 / 非字符串
+  assert.throws(
+    () => engine.load({ ...base, behavior: { keywords: { verbosity: { more: ['   '] } } } }, { rootDir: tmpRoot('kwb2') }),
+    (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
+  );
+  assert.throws(
+    () => engine.load({ ...base, behavior: { keywords: { verbosity: { more: [42] } } } }, { rootDir: tmpRoot('kwb3') }),
     (e) => e && e.code === 'EVOLUTION_SCHEMA_INVALID'
   );
 });

@@ -30,6 +30,7 @@ const { createFeedbackEngine, DOWNWEIGHT_PER_VETO, BLACKLIST_THRESHOLD, DIVERGEN
 const {
   createBehaviorLedger,
   parseCorrection,
+  mergeKeywords,
   BEHAVIOR_DIMENSIONS,
   BEHAVIOR_DIRECTIONS,
   DEFAULT_WINDOW_SIZE,
@@ -65,6 +66,7 @@ module.exports = {
   classifySignal,
   aggregate,
   parseCorrection,
+  mergeKeywords,
   computeExpectedGain,
   assertContentT4Safe,
   detectInjection,

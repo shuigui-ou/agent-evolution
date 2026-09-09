@@ -1,0 +1,37 @@
+# engine 行为词表声明式注入测试用 host（host-behavior.yaml + behavior.keywords 段）
+# 创作域（novel）词表：只扩词、不扩维度/方向 —— 解决内置通用词表拆不中创作表达的问题
+schema: 1
+meta:
+  agent: engine-behavior-keywords-host
+  version: 0.1.0
+kernel:
+  dataDir: data/evolution
+  level: auto_report
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]
+  enabled: true
+knowledge:
+  root: data/evolution/knowledge
+  whitelist:
+    - errors.jsonl
+behavior:
+  windowSize: 10
+  minEvidence: 2
+  confidence: 0.5
+  keywords:
+    verbosity:
+      more: [展开写, 扩写, 写饱满, 铺陈开]
+      less: []
+    detail:
+      more: [单薄, 太单薄了, 心理铺垫不够, 人物动机不足, 细节撑不起来]
+      less: []
+    pace:
+      more: [先铺垫再给高潮]
+      less: []
+objectives:
+  - title: 满足作者显式创作期望
+    types: [G]
+    weight: 3
+server:
+  enabled: false

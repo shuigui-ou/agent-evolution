@@ -21,6 +21,7 @@ const path = require('node:path');
 const {
   createBehaviorLedger,
   parseCorrection,
+  mergeKeywords,
   BEHAVIOR_DIMENSIONS,
 } = require('../src/behavior.cjs');
 const { createKernel, KernelError } = require('../src/kernel.cjs');
@@ -73,6 +74,54 @@ test('parseCorrection：中文纠偏 → 维度/方向启发式', () => {
   assert.equal(r.direction, 'more');
   assert.equal(parseCorrection('今天的天气如何'), null);
   assert.equal(parseCorrection(''), null);
+});
+
+// ---------------------------------------------------------------- 2b. parseCorrection 词表注入（创作域失配修复）
+test('parseCorrection 词表注入：注入创作词表后命中域表达；无注入旧行为不变', () => {
+  const CREATIVE_KEYWORDS = {
+    detail: { more: ['单薄', '太单薄了', '心理铺垫不够', '人物动机不足'], less: [] },
+    verbosity: { more: ['展开写', '扩写', '写饱满'], less: [] },
+  };
+  // ①注入后："太单薄了"（detail:more）与"展开写"（verbosity:more）均可命中创作表达
+  const r = parseCorrection('这段太单薄了，展开写', CREATIVE_KEYWORDS);
+  assert.ok(r, '注入创作词表后必须命中');
+  assert.equal(r.direction, 'more');
+  assert.ok(['detail', 'verbosity'].includes(r.dimension), `命中维度应为 detail|verbosity，实际 ${r.dimension}`);
+  // ②无注入（纯内置通用词表）→ 同一文本拆不中（回归旧行为：内置词表不含创作域词）
+  assert.equal(parseCorrection('这段太单薄了，展开写'), null);
+  // ③通用词表回归不受注入影响：内置词仍可命中
+  const r2 = parseCorrection('太长了，简洁一点', CREATIVE_KEYWORDS);
+  assert.equal(r2.dimension, 'verbosity');
+  assert.equal(r2.direction, 'less');
+  // ④mergeKeywords 是纯函数：不改入参；内置词被保留，外部词追加去重
+  const builtin = { verbosity: { more: ['展开讲'], less: ['太长'] } };
+  const merged = mergeKeywords(builtin, { verbosity: { more: ['展开讲', '扩写'], less: [] } });
+  assert.deepEqual(builtin.verbosity.more, ['展开讲']); // 入参未被修改
+  assert.deepEqual(merged.verbosity.more, ['展开讲', '扩写']); // 追加去重
+  assert.deepEqual(merged.verbosity.less, ['太长']); // 未声明方向保留内置
+  // ⑤未知维度/方向被忽略（维度仍受控枚举）
+  const merged2 = mergeKeywords(builtin, { evil: { more: ['x'] }, verbosity: { sideways: ['y'], more: ['z'] } });
+  assert.deepEqual(Object.keys(merged2), ['verbosity']);
+  assert.deepEqual(merged2.verbosity.more, ['展开讲', 'z']);
+});
+
+// 账本级：createBehaviorLedger({keywords}) 携带域词表 → ledger.parseCorrection 使用合并词表
+test('createBehaviorLedger keywords：账本级 parseCorrection 用合并词表（含注入词）', () => {
+  const dataDir = tmpData('ledgerkw');
+  const ledger = createBehaviorLedger({
+    dataDir,
+    keywords: { detail: { more: ['太单薄了', '心理铺垫不够'], less: [] } },
+  });
+  const r = ledger.parseCorrection('人物心理铺垫不够，太单薄了');
+  assert.ok(r);
+  assert.equal(r.dimension, 'detail');
+  assert.equal(r.direction, 'more');
+  // 无 keywords 的账本保持内置词表（创作域词拆不中，通用词仍命中）
+  const plain = createBehaviorLedger({ dataDir: tmpData('plainkw') });
+  assert.equal(plain.parseCorrection('心理铺垫不够，太单薄了'), null);
+  const rPlain = plain.parseCorrection('太长了');
+  assert.equal(rPlain && rPlain.dimension, 'verbosity');
+  assert.equal(rPlain && rPlain.direction, 'less');
 });
 
 // ---------------------------------------------------------------- 3. profile

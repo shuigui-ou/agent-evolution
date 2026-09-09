@@ -77,3 +77,28 @@ test('跨实例续链：新实例接着旧链追加，seq 连续且整体校验�
     rmTmpDir(dir);
   }
 });
+
+test('并发防分叉（BUG 回归）：实例 append 后新实例基于"磁盘链尾"续写，seq 不重复、链仍可验证', () => {
+  const dir = makeTmpDir('audit-race');
+  try {
+    // 场景：a2 在 a1 第一次 append 之后才创建（内存链尾 = seq1）。
+    // 随后 a1 再 append（seq2），a2 若仍按自己的"陈旧内存链尾"(seq1) 续写 → seq 重复、verify 断链。
+    // 修复后 append 以磁盘最新链尾为准：a2 追加时应看到磁盘尾 seq2 → seq3，链完整。
+    const a1 = createAudit({ dataDir: dir });
+    const r1 = a1.append('CYCLE_DONE', { note: 'a1-first' });
+    assert.equal(r1.seq, 1);
+
+    const a2 = createAudit({ dataDir: dir }); // 此刻内存链尾 = r1(seq1)
+    const r2 = a1.append('CYCLE_DONE', { note: 'a1-second' }); // a1 续写 → seq2（内存与磁盘一致）
+    assert.equal(r2.seq, 2);
+
+    const r3 = a2.append('KERNEL_BOOT', { note: 'a2-after-a1' }); // a2 内存陈旧，但 append 前刷新磁盘尾
+    assert.equal(r3.seq, 3, 'a2 不得按陈旧内存链尾(seq1)续写产生重复 seq');
+    assert.equal(r3.prev, r2.hash, 'a2 的 prev 必须指向磁盘最新链尾 hash（r2）');
+    assert.ok(a1.verify().ok);
+    assert.ok(a2.verify().ok);
+    assert.equal(a2.length(), 3);
+  } finally {
+    rmTmpDir(dir);
+  }
+});

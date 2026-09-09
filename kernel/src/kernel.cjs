@@ -110,7 +110,9 @@ function resolveTier(primitives = []) {
  * @param {number} [opts.dailyLimit=20]
  * @param {object|null} [opts.resources] - 资源层客户端（本地文件适配器/HTTP stub）
  * @param {Function|null} [opts.candidateGenerator] - async (signal)=>candidate 输入数组（本地候选生成）
- * @param {object} [opts.behavior] - 行为贴合层配置 { windowSize, minEvidence, confidence }
+ * @param {object} [opts.behavior] - 行为贴合层配置 { windowSize, minEvidence, confidence, keywords? }
+ * @param {object|null} [opts.outcome] - 出口选择环阈值 { confirmToStrengthen, refuteToDecay, refuteToRetire, survivalWindow }
+ *   （缺省 null → 经验 lane 考核账本用 OUTCOME_DEFAULTS，行为不变）
  */
 function createKernel({
   dataDir = 'runtime',
@@ -122,6 +124,7 @@ function createKernel({
   resources = null,
   candidateGenerator = null,
   behavior = null,
+  outcome = null,
 } = {}) {
   const primitives = host.primitives || PRIMITIVES.slice();
   const tier = resolveTier(primitives);
@@ -164,8 +167,14 @@ function createKernel({
   const permission = createPermissionKnob({ level, dailyLimit, audit });
   // 行为贴合层（方向 A）：独立账本，用户显式纠偏 → 输出风格偏好；kill 后不可写
   const behaviorLedger = createBehaviorLedger({ dataDir, audit, ...(behavior || {}) });
-  // 出口选择环（经验 lane）：落地条目服役考核账本 —— 注入签发 + 同因再犯自动证伪
-  const outcomeLedger = createOutcomeLedger({ dataDir, lane: 'experience', audit });
+  // 出口选择环（经验 lane）：落地条目服役考核账本 —— 注入签发 + 同因再犯自动证伪。
+  // thresholds 缺省 undefined → outcome.cjs 用 OUTCOME_DEFAULTS（行为不变）；yaml outcome 段可覆盖。
+  const outcomeLedger = createOutcomeLedger({
+    dataDir,
+    lane: 'experience',
+    audit,
+    thresholds: outcome || undefined,
+  });
 
   // ---- 内核状态 ----
   let killed = false; // kill-switch：一键降级 P0，agent 回到纯知识面文件模式

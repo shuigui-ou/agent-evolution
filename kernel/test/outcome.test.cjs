@@ -68,7 +68,43 @@ test('outcome 账本：confirmed×3 → strengthened；revoke 清零回 active�
   rmTmpDir(dir);
 });
 
-// ---------------------------------------------------------------- 3. behavior 闭环：同对再犯 → decayed → retired → 指引排除 → revoke 复活
+// ---------------------------------------------------------------- 3. 自定义阈值（outcome 段透传到 experience lane）
+test('自定义阈值：confirmToStrengthen=1 → 1 次 confirmed 即 strengthened（账本级 + kernel 装配级）', () => {
+  const dir = makeTmpDir('outth');
+  // 账本级：createOutcomeLedger 直接传 thresholds
+  const ledger = createOutcomeLedger({
+    dataDir: dir,
+    lane: 'test-th',
+    thresholds: { confirmToStrengthen: 1, refuteToDecay: 2, refuteToRetire: 3 },
+  });
+  assert.equal(ledger.stateOf('x').status, 'active');
+  ledger.record('x', 'confirmed', { source: 'host' });
+  let s = ledger.stateOf('x');
+  assert.equal(s.status, 'strengthened');
+  assert.equal(s.confirmed, 1);
+  // 持久化重放同样按新阈值
+  const ledger2 = createOutcomeLedger({ dataDir: dir, lane: 'test-th', thresholds: { confirmToStrengthen: 1 } });
+  assert.equal(ledger2.stateOf('x').status, 'strengthened');
+  rmTmpDir(dir);
+
+  // kernel 装配级：createKernel({outcome}) → reportOutcome 透传生效
+  const root = makeTmpDir('ekth');
+  const k = createKernel({
+    dataDir: path.join(root, 'runtime'),
+    host: { agentId: 't', primitives: PRIMITIVES.slice() },
+    knowledgeSurface: { root: path.join(root, 'k'), whitelist: ['learnings.jsonl'] },
+    objectives: [],
+    level: 'auto_report',
+    outcome: { confirmToStrengthen: 1, refuteToDecay: 2, refuteToRetire: 3 },
+  });
+  k.reportOutcome({ lane: 'experience', key: 'exp-fast', verdict: 'confirmed', source: 'host' });
+  const st = k.outcomeStatus({ lane: 'experience', key: 'exp-fast' });
+  assert.equal(st.status, 'strengthened');
+  assert.equal(st.confirmed, 1);
+  rmTmpDir(root);
+});
+
+// ---------------------------------------------------------------- 4. behavior 闭环：同对再犯 → decayed → retired → 指引排除 → revoke 复活
 test('behavior 出口闭环：指引签发 → 同对再犯 refute → decayed 停注 → 冷却期继续犯 → retired → 指引排除；revoke 后恢复', () => {
   const dir = makeTmpDir('bcl');
   const ledger = createBehaviorLedger({
@@ -206,7 +242,7 @@ test('reportOutcome 显式上报（可选增强）：confirmed 累积 → streng
   rmTmpDir(root);
 });
 
-// ---------------------------------------------------------------- 7. retired 跨重启仍停用（账本重放驱动注入面过滤）
+// ---------------------------------------------------------------- 8. retired 跨重启仍停用（账本重放驱动注入面过滤）
 test('retired 跨重启停用：新内核同 dataDir 重放考核账本 → loadExperiences 不装载 → preAction 停用', async () => {
   const root = makeTmpDir('ekrel');
   const dataDir = path.join(root, 'runtime');

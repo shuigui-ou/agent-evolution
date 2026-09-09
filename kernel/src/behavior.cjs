@@ -51,6 +51,55 @@ const BEHAVIOR_DIMENSIONS = Object.freeze({
 /** 方向（受控枚举） */
 const BEHAVIOR_DIRECTIONS = Object.freeze(['more', 'less']);
 
+/** 内置通用行为纠偏词表（缺省域 = 通用工作场景）。
+ *  维度/方向受控枚举 —— 外部域词表只能【扩词】（mergeKeywords 追加），不能新增维度/方向。
+ *  结构：dimension → direction(more|less) → 词数组（命中用 t.includes(kw) 子串匹配）。 */
+const KEYWORDS = Object.freeze({
+  verbosity: Object.freeze({
+    less: Object.freeze(['太长了', '太长', '啰嗦', '废话', '太啰嗦', '简洁', '简练', '短一点', '少说', '精简', '别啰嗦', '太长不看', '概括', '简短']),
+    more: Object.freeze(['详细点', '详细些', '更详细', '展开讲', '展开说', '多说', '具体点', '讲全', '充分展开', '多写', '详细']),
+  }),
+  detail: Object.freeze({
+    less: Object.freeze(['不用细节', '别展开细节', '少点细节', '要点即可', '只要要点', '别抠细节', '点到为止']),
+    more: Object.freeze(['有依据吗', '证据', '数据支撑', '给数据', '举例', '论证', '核实', '查证', '来源', '出处', '细节']),
+  }),
+  proactivity: Object.freeze({
+    less: Object.freeze(['只回答', '别自作主张', '不要额外', '别主动', '我问什么答什么', '别乱做', '别加戏', '不用管']),
+    more: Object.freeze(['主动点', '主动帮我', '一并', '顺手', '多帮我', '你决定', '替我想', '自己看着办']),
+  }),
+  pace: Object.freeze({
+    less: Object.freeze(['直接给', '别分步', '一次性', '直接说', '不要确认', '直接做', '别问', '一口气']),
+    more: Object.freeze(['分步', '先确认', '逐步', '一步步', '每步确认', '先问', '先列计划', '走一步确认一步']),
+  }),
+});
+
+/**
+ * 合并外部域词表到内置词表（纯函数，不改入参）。
+ * 语义：外部声明追加到内置词数组（trim + 去重，保留首现）；内置词表不被覆盖——
+ *      域词表只解决"内置词表拆不中的创作/专业表达"，无需剔除通用词。
+ * 维度/方向仍受控：只遍历内置 4 维 × more/less；外部未知维度/方向被忽略（engine schema 校验先行兜底，
+ *      此处 kernel 侧静默容错，防止任意新维度污染推断）。
+ * @param {object} builtin - 内置词表（KEYWORDS）
+ * @param {object|null} [override] - 外部声明词表 {dimension:{more:[...],less:[...]}}
+ * @returns {object} 合并后的新词表（每维每向都是新数组）
+ */
+function mergeKeywords(builtin, override) {
+  const out = {};
+  for (const [dim, dirs] of Object.entries(builtin || {})) {
+    out[dim] = {};
+    for (const [dir, words] of Object.entries(dirs || {})) {
+      const merged = words.slice();
+      const extra = (override && override[dim] && Array.isArray(override[dim][dir])) ? override[dim][dir] : [];
+      for (const w of extra) {
+        const word = String(w).trim();
+        if (word && !merged.includes(word)) merged.push(word);
+      }
+      out[dim][dir] = merged;
+    }
+  }
+  return out;
+}
+
 /** 维度默认值：windowSize 取最近 N 条观察 */
 const DEFAULT_WINDOW_SIZE = 20;
 /** 形成稳定偏好的最少多数票数 */
@@ -62,32 +111,17 @@ const DEFAULT_CONFIDENCE = 0.6;
  * 解析用户纠偏文本 → 结构化观察（启发式最佳猜测；精确上报请用 tapBehavior 直传）。
  * 命中多个维度时取命中条数最多的维度；同维度双向命中则抵消后看净方向。
  * @param {string} text - 用户对输出的纠偏原文
+ * @param {object|null} [keywordsOverride] - 外部域词表（mergeKeywords 合并进内置 KEYWORDS）；
+ *   缺省 null → 纯内置通用词表（兼容旧行为）
  * @returns {{dimension: string, direction: 'more'|'less', matched: string[]}|null}
  *   null = 未识别出行为纠偏（不是所有反馈都是行为反馈）
  */
-function parseCorrection(text) {
+function parseCorrection(text, keywordsOverride) {
   const t = String(text || '').trim();
   if (!t) return null;
-  const KEYWORDS = {
-    verbosity: {
-      less: ['太长了', '太长', '啰嗦', '废话', '太啰嗦', '简洁', '简练', '短一点', '少说', '精简', '别啰嗦', '太长不看', '概括', '简短'],
-      more: ['详细点', '详细些', '更详细', '展开讲', '展开说', '多说', '具体点', '讲全', '充分展开', '多写', '详细'],
-    },
-    detail: {
-      less: ['不用细节', '别展开细节', '少点细节', '要点即可', '只要要点', '别抠细节', '点到为止'],
-      more: ['有依据吗', '证据', '数据支撑', '给数据', '举例', '论证', '核实', '查证', '来源', '出处', '细节'],
-    },
-    proactivity: {
-      less: ['只回答', '别自作主张', '不要额外', '别主动', '我问什么答什么', '别乱做', '别加戏', '不用管'],
-      more: ['主动点', '主动帮我', '一并', '顺手', '多帮我', '你决定', '替我想', '自己看着办'],
-    },
-    pace: {
-      less: ['直接给', '别分步', '一次性', '直接说', '不要确认', '直接做', '别问', '一口气'],
-      more: ['分步', '先确认', '逐步', '一步步', '每步确认', '先问', '先列计划', '走一步确认一步'],
-    },
-  };
+  const KEYWORDS_ACTIVE = keywordsOverride ? mergeKeywords(KEYWORDS, keywordsOverride) : KEYWORDS;
   const hits = []; // {dimension, direction, kw}
-  for (const [dim, dirs] of Object.entries(KEYWORDS)) {
+  for (const [dim, dirs] of Object.entries(KEYWORDS_ACTIVE)) {
     for (const [dir, kws] of Object.entries(dirs)) {
       for (const kw of kws) {
         if (t.includes(kw)) hits.push({ dimension: dim, direction: dir, kw });
@@ -126,6 +160,8 @@ function parseCorrection(text) {
  * @param {number} [opts.confidence=0.6] - 多数方向置信度阈值
  * @param {number} [opts.survivalWindow=3] - 签发后连续异维纠偏数 → 自动 confirmed
  * @param {object} [opts.outcome] - 考核阈值 { confirmToStrengthen, refuteToDecay, refuteToRetire }
+ * @param {object|null} [opts.keywords=null] - 外部域词表 {dimension:{more:[],less:[]}}，账本级启发式解析用
+ *   （仅扩词、不扩维度/方向；缺省 null → 内置通用词表）
  */
 function createBehaviorLedger({
   dataDir = 'runtime',
@@ -135,6 +171,7 @@ function createBehaviorLedger({
   confidence = DEFAULT_CONFIDENCE,
   survivalWindow = OUTCOME_DEFAULTS.survivalWindow,
   outcome = null,
+  keywords = null,
 } = {}) {
   const dir = path.join(dataDir, 'behavior');
   const obsFile = path.join(dir, 'observations.jsonl');
@@ -143,6 +180,9 @@ function createBehaviorLedger({
   const minEv = Math.max(1, Math.floor(minEvidence) || DEFAULT_MIN_EVIDENCE);
   const conf = Math.min(1, Math.max(0.5, Number(confidence) || DEFAULT_CONFIDENCE));
   const survive = Math.max(1, Math.floor(survivalWindow) || OUTCOME_DEFAULTS.survivalWindow);
+  // 账本级生效词表 = 内置通用词表 + 外部声明追加（createBehaviorLedger 的 record 走受控通道不解析文本，
+  // 该词表供账本暴露的 parseCorrection()/后续内部文本解析统一使用；kernel 侧透传自 behavior.keywords）
+  const effectiveKeywords = keywords ? mergeKeywords(KEYWORDS, keywords) : KEYWORDS;
 
   /** 偏好对考核账本（出口选择环：签发后同维再犯=refuted / 异维生存=confirmed） */
   const pairOutcome = createOutcomeLedger({ dataDir, lane: 'behavior', audit, thresholds: outcome || OUTCOME_DEFAULTS });
@@ -381,12 +421,15 @@ function createBehaviorLedger({
     list: () => observations.slice(),
     files: { obsFile, outcomeFile: pairOutcome.file },
     config: { windowSize: win, minEvidence: minEv, confidence: conf, survivalWindow: survive },
+    // 账本级启发式解析（携带账本声明的域词表；无声明 = 内置通用词表）
+    parseCorrection: (text) => parseCorrection(text, effectiveKeywords),
   };
 }
 
 module.exports = {
   createBehaviorLedger,
   parseCorrection,
+  mergeKeywords,
   BEHAVIOR_DIMENSIONS,
   BEHAVIOR_DIRECTIONS,
   DEFAULT_WINDOW_SIZE,

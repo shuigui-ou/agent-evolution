@@ -39,9 +39,42 @@ const PRIMITIVES = Object.freeze([
   'tap', 'pre_action', 'interrupt', 'write', 'checkpoint', 'audit',
 ]);
 
+/** 行为维度受控枚举名（与 kernel behavior BEHAVIOR_DIMENSIONS 一致，仅用于 schema 校验） */
+const BEHAVIOR_DIMENSIONS = Object.freeze(['verbosity', 'detail', 'proactivity', 'pace']);
+/** 行为方向受控枚举（与 kernel behavior BEHAVIOR_DIRECTIONS 一致） */
+const BEHAVIOR_DIRECTIONS = Object.freeze(['more', 'less']);
+/** outcome 出口选择环阈值字段（与 kernel outcome OUTCOME_DEFAULTS 一致） */
+const OUTCOME_THRESHOLD_FIELDS = Object.freeze([
+  'confirmToStrengthen',
+  'refuteToDecay',
+  'refuteToRetire',
+  'survivalWindow',
+]);
+
 /** 统一日志前缀（只进 stderr，不污染宿主业务日志） */
 function log(...args) {
   console.warn('[engine]', ...args);
+}
+
+/**
+ * 深度拷贝行为词表（validateConfig 阶段已校验结构；此处按已知结构逐层复制，避免 cfg 引用用户可变对象）。
+ * @param {object} keywords - {dimension:{more:[],less:[]}}
+ * @returns {object} 新对象
+ */
+function cloneBehaviorKeywords(keywords) {
+  const out = {};
+  for (const [dim, dirs] of Object.entries(keywords)) {
+    out[dim] = {};
+    for (const [dir, words] of Object.entries(dirs)) {
+      out[dim][dir] = words.slice();
+    }
+  }
+  return out;
+}
+
+/** outcome 段是否声明了任一阈值字段（全缺省 → 返回 null，走内核 OUTCOME_DEFAULTS） */
+function hasAnyOutcomeField(outcome) {
+  return OUTCOME_THRESHOLD_FIELDS.some((f) => outcome[f] !== undefined);
 }
 
 // =====================================================================
@@ -136,6 +169,58 @@ function validateConfig(raw, yamlDir) {
     (typeof behavior.confidence !== 'number' || behavior.confidence <= 0 || behavior.confidence > 1)) {
     throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'behavior.confidence 必须在 (0,1]');
   }
+  // 行为词表声明式注入：可选段；结构必须为 {dimension:{more|less:[非空字符串]}}。
+  // 维度/方向仍受控枚举（只扩词、不扩维度/方向），非法结构拒绝装配（EVOLUTION_SCHEMA_INVALID）。
+  if (behavior.keywords !== undefined) {
+    if (!behavior.keywords || typeof behavior.keywords !== 'object' || Array.isArray(behavior.keywords)) {
+      throw new EngineError(
+        'EVOLUTION_SCHEMA_INVALID',
+        'behavior.keywords 必须是对象：{dimension:{more:[词],less:[词]}}'
+      );
+    }
+    for (const [dim, dirs] of Object.entries(behavior.keywords)) {
+      if (!BEHAVIOR_DIMENSIONS.includes(dim)) {
+        throw new EngineError(
+          'EVOLUTION_SCHEMA_INVALID',
+          `behavior.keywords 含未知维度 ${dim}：只允许 ${BEHAVIOR_DIMENSIONS.join('|')}`,
+          { dimension: dim }
+        );
+      }
+      if (!dirs || typeof dirs !== 'object' || Array.isArray(dirs)) {
+        throw new EngineError('EVOLUTION_SCHEMA_INVALID', `behavior.keywords.${dim} 必须是 {more:[],less:[]} 对象`);
+      }
+      for (const [dir, words] of Object.entries(dirs)) {
+        if (!BEHAVIOR_DIRECTIONS.includes(dir)) {
+          throw new EngineError(
+            'EVOLUTION_SCHEMA_INVALID',
+            `behavior.keywords.${dim} 含非法方向 ${dir}：只允许 more|less`,
+            { direction: dir }
+          );
+        }
+        if (!Array.isArray(words) || words.some((w) => typeof w !== 'string' || !String(w).trim())) {
+          throw new EngineError(
+            'EVOLUTION_SCHEMA_INVALID',
+            `behavior.keywords.${dim}.${dir} 必须是非空字符串数组`
+          );
+        }
+      }
+    }
+  }
+  // 出口选择环阈值（outcome 段）：可选；出现则四字段须为正整数（缺省 = 内核 OUTCOME_DEFAULTS）
+  if (raw.outcome !== undefined && (!raw.outcome || typeof raw.outcome !== 'object' || Array.isArray(raw.outcome))) {
+    throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'outcome 必须是对象');
+  }
+  const outcome = (raw.outcome && typeof raw.outcome === 'object' && !Array.isArray(raw.outcome)) ? raw.outcome : {};
+  for (const field of OUTCOME_THRESHOLD_FIELDS) {
+    if (outcome[field] !== undefined &&
+      (typeof outcome[field] !== 'number' || !Number.isInteger(outcome[field]) || outcome[field] <= 0)) {
+      throw new EngineError(
+        'EVOLUTION_SCHEMA_INVALID',
+        `outcome.${field} 必须是正整数`,
+        { field, got: outcome[field] }
+      );
+    }
+  }
   return {
     schema: SCHEMA_VERSION,
     meta: {
@@ -166,7 +251,18 @@ function validateConfig(raw, yamlDir) {
       windowSize: typeof behavior.windowSize === 'number' ? behavior.windowSize : 20,
       minEvidence: typeof behavior.minEvidence === 'number' ? behavior.minEvidence : 3,
       confidence: typeof behavior.confidence === 'number' ? behavior.confidence : 0.6,
+      // 域词表（声明式注入）：缺省 undefined → 内核使用内置通用词表（完全兼容旧 yaml）
+      keywords: behavior.keywords !== undefined ? cloneBehaviorKeywords(behavior.keywords) : undefined,
     },
+    // 出口选择环阈值：缺省 null → 内核使用 OUTCOME_DEFAULTS（行为不变）
+    outcome: hasAnyOutcomeField(outcome)
+      ? {
+          confirmToStrengthen: typeof outcome.confirmToStrengthen === 'number' ? outcome.confirmToStrengthen : 3,
+          refuteToDecay: typeof outcome.refuteToDecay === 'number' ? outcome.refuteToDecay : 2,
+          refuteToRetire: typeof outcome.refuteToRetire === 'number' ? outcome.refuteToRetire : 3,
+          survivalWindow: typeof outcome.survivalWindow === 'number' ? outcome.survivalWindow : 3,
+        }
+      : null,
     server: {
       enabled: server.enabled === true,
       prefix: typeof server.prefix === 'string' && server.prefix ? server.prefix : '/api/evolution',
@@ -488,6 +584,7 @@ function createEngineHandle(cfg, opts = {}) {
         dailyLimit: cfg.kernel.dailyLimit,
         candidateGenerator: hostCandidateGenerator,
         behavior: cfg.behavior,
+        outcome: cfg.outcome,
       });
       loadSeedRecords(state.kernel);
       try {
@@ -1306,7 +1403,9 @@ function createEngineHandle(cfg, opts = {}) {
           ? kernelMod.parseCorrection
           : null;
         if (!parser) return { ok: false, reason: 'no_parser' };
-        parsed = parser(textStr);
+        // 声明式域词表注入：cfg.behavior.keywords 缺省 undefined → 内核内置通用词表（兼容旧行为）
+        const domainKeywords = (cfg.behavior && cfg.behavior.keywords) || undefined;
+        parsed = parser(textStr, domainKeywords);
         if (!parsed) return { ok: false, reason: 'no_behavior_signal', text: textStr.slice(0, 100) };
         dim = parsed.dimension;
         dir = parsed.direction;
@@ -1524,5 +1623,8 @@ module.exports = {
   ENGINE_VERSION,
   LEVELS,
   PRIMITIVES,
+  BEHAVIOR_DIMENSIONS,
+  BEHAVIOR_DIRECTIONS,
+  OUTCOME_THRESHOLD_FIELDS,
   EngineError,
 };
