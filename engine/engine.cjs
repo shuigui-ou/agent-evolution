@@ -26,7 +26,7 @@ const { EngineError } = require('./errors.cjs');
 const yamlMin = require('./yaml-min.cjs');
 
 /** 引擎版本 */
-const ENGINE_VERSION = '1.0.0';
+const ENGINE_VERSION = '1.2.0';
 
 /** yaml schema 版本（evolution.yaml 顶层 schema 字段） */
 const SCHEMA_VERSION = 1;
@@ -122,6 +122,20 @@ function validateConfig(raw, yamlDir) {
   if (server.enabled !== undefined && typeof server.enabled !== 'boolean') {
     throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'server.enabled 必须是布尔值');
   }
+  // 行为贴合层（方向 A）：可选段，只做参数调优；缺省 = 内核默认值（enabled 隐式开）
+  const behavior = raw.behavior || {};
+  if (behavior.windowSize !== undefined &&
+    (typeof behavior.windowSize !== 'number' || behavior.windowSize <= 0)) {
+    throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'behavior.windowSize 必须是正整数');
+  }
+  if (behavior.minEvidence !== undefined &&
+    (typeof behavior.minEvidence !== 'number' || behavior.minEvidence <= 0)) {
+    throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'behavior.minEvidence 必须是正整数');
+  }
+  if (behavior.confidence !== undefined &&
+    (typeof behavior.confidence !== 'number' || behavior.confidence <= 0 || behavior.confidence > 1)) {
+    throw new EngineError('EVOLUTION_SCHEMA_INVALID', 'behavior.confidence 必须在 (0,1]');
+  }
   return {
     schema: SCHEMA_VERSION,
     meta: {
@@ -148,6 +162,11 @@ function validateConfig(raw, yamlDir) {
     signals: raw.signals && typeof raw.signals === 'object' ? raw.signals : {},
     thread: raw.thread && typeof raw.thread === 'object' ? raw.thread : {},
     analyze: raw.analyze && typeof raw.analyze === 'object' ? raw.analyze : {},
+    behavior: {
+      windowSize: typeof behavior.windowSize === 'number' ? behavior.windowSize : 20,
+      minEvidence: typeof behavior.minEvidence === 'number' ? behavior.minEvidence : 3,
+      confidence: typeof behavior.confidence === 'number' ? behavior.confidence : 0.6,
+    },
     server: {
       enabled: server.enabled === true,
       prefix: typeof server.prefix === 'string' && server.prefix ? server.prefix : '/api/evolution',
@@ -468,6 +487,7 @@ function createEngineHandle(cfg, opts = {}) {
         level: state.level,
         dailyLimit: cfg.kernel.dailyLimit,
         candidateGenerator: hostCandidateGenerator,
+        behavior: cfg.behavior,
       });
       loadSeedRecords(state.kernel);
       try {
@@ -1258,6 +1278,139 @@ function createEngineHandle(cfg, opts = {}) {
     }
   }
 
+  // =====================================================================
+  // 行为贴合层（方向 A）：用户显式纠偏 → 输出风格偏好 → 可注入指引
+  // 宿主把用户对输出的纠偏原文喂进来（或直接给受控 dimension/direction），
+  // 引擎负责 parseCorrection / 记录；指引由宿主决定何时拼入上下文。
+  // =====================================================================
+
+  /**
+   * 记录一次行为纠偏。两种入参：
+   *   1. tapBehavior({ text })                 → 先启发式解析，命中才记录
+   *   2. tapBehavior({ dimension, direction }) → 精确上报（宿主自己已判定）
+   * @returns {{ok:boolean, recorded?:boolean, dimension?:string, direction?:string, reason?:string}}
+   */
+  function tapBehavior({ text = '', dimension = '', direction = '' } = {}) {
+    if (!ready()) return notReady();
+    const s = subs();
+    if (!s || !state.kernel) return notReady();
+    try {
+      let dim = String(dimension || '');
+      let dir = String(direction || '');
+      let parsed = null;
+      if (!dim || !dir) {
+        const textStr = String(text || '');
+        if (!textStr.trim()) return { ok: false, reason: 'no_input' };
+        const kernelMod = state.kernelModule;
+        const parser = kernelMod && typeof kernelMod.parseCorrection === 'function'
+          ? kernelMod.parseCorrection
+          : null;
+        if (!parser) return { ok: false, reason: 'no_parser' };
+        parsed = parser(textStr);
+        if (!parsed) return { ok: false, reason: 'no_behavior_signal', text: textStr.slice(0, 100) };
+        dim = parsed.dimension;
+        dir = parsed.direction;
+      }
+      const rec = state.kernel.tapBehavior({ dimension: dim, direction: dir, text: String(text || '') });
+      return { ok: true, recorded: true, dimension: rec.dimension, direction: rec.direction, parsed };
+    } catch (e) {
+      log('tapBehavior 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', error: e.message };
+    }
+  }
+
+  /** 实时行为偏好推断（只读） */
+  function behaviorProfile() {
+    if (!ready()) return { ok: false, ...notReady(), profile: [] };
+    try {
+      return { ok: true, profile: state.kernel.behaviorProfile() };
+    } catch (e) {
+      log('behaviorProfile 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', profile: [] };
+    }
+  }
+
+  /** 生成可注入的行为指引（模板文本；无稳定偏好 text=''） */
+  function behaviorGuidance() {
+    if (!ready()) return { ok: false, ...notReady(), text: '', active: [] };
+    try {
+      const g = state.kernel.behaviorGuidance();
+      return { ok: true, text: g.text, active: g.active };
+    } catch (e) {
+      log('behaviorGuidance 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', text: '', active: [] };
+    }
+  }
+
+  /** 清空行为观察（仅 user 来源） */
+  function behaviorReset(dimension = '', opts = {}) {
+    if (!ready()) return notReady();
+    try {
+      const r = state.kernel.behaviorReset(String(dimension || ''), { source: opts.source || 'user' });
+      return { ok: true, removed: r.removed, dimension: r.dimension };
+    } catch (e) {
+      log('behaviorReset 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', error: e.message };
+    }
+  }
+
+  /**
+   * 出口选择环：记一次条目考核结论（可选增强；自动信号由内核从事件流推导）。
+   * @param {object} p
+   * @param {string} [p.lane='experience'] - 'experience'（key=experience_id）| 'behavior'（key='dim:dir'）
+   * @param {string} p.key
+   * @param {string} p.verdict - 'confirmed' | 'refuted'
+   * @param {string} [p.source='host']
+   */
+  function reportOutcome({ lane = 'experience', key = '', verdict = '', source = 'host', note = '' } = {}) {
+    if (!ready()) return notReady();
+    if (!key || !verdict) return { ok: false, reason: 'invalid_params', lane, key, verdict };
+    try {
+      const r = state.kernel.reportOutcome({ lane: String(lane), key: String(key), verdict: String(verdict), source: String(source || 'host'), note });
+      return { ok: true, lane: r.lane, key: r.key, verdict: r.verdict, state: r.state };
+    } catch (e) {
+      log('reportOutcome 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', error: e.message };
+    }
+  }
+
+  /** 出口选择环：单条目考核状态（只读） */
+  function outcomeStatus({ lane = 'experience', key = '' } = {}) {
+    if (!ready()) return { ok: false, ...notReady() };
+    if (!key) return { ok: false, reason: 'invalid_params', lane, key };
+    try {
+      return { ok: true, ...state.kernel.outcomeStatus({ lane: String(lane), key: String(key) }) };
+    } catch (e) {
+      log('outcomeStatus 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', error: e.message };
+    }
+  }
+
+  /** 出口选择环：两 lane 考核汇总（状态分布 / 总数 / 账本文件） */
+  function outcomeSummary() {
+    if (!ready()) return { ok: false, ...notReady(), experience: null, behavior: null };
+    try {
+      const r = state.kernel.outcomeSummary();
+      return { ok: true, experience: r.experience, behavior: r.behavior, file: r.file };
+    } catch (e) {
+      log('outcomeSummary 读取失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', experience: null, behavior: null };
+    }
+  }
+
+  /** 出口选择环：手动复活（仅 user 来源；计数清零） */
+  function revokeOutcome({ lane = 'experience', key = '' } = {}) {
+    if (!ready()) return notReady();
+    if (!key) return { ok: false, reason: 'invalid_params', lane, key };
+    try {
+      const r = state.kernel.revokeOutcome({ lane: String(lane), key: String(key) });
+      return { ok: true, lane: r.lane, key: r.key, revoked: true, state: r.state };
+    } catch (e) {
+      log('revokeOutcome 失败（不影响宿主主流程）：', e.message);
+      return { ok: false, reason: 'kernel_error', error: e.message };
+    }
+  }
+
   /** init 结果 / 元信息（对应宿主 evolution.init 返回值 + engine 扩展字段） */
   function meta() {
     return {
@@ -1319,6 +1472,16 @@ function createEngineHandle(cfg, opts = {}) {
     applySuggestion,
     divergenceSummary,
     killSwitch,
+    // 行为贴合层（方向 A）
+    tapBehavior,
+    behaviorProfile,
+    behaviorGuidance,
+    behaviorReset,
+    // 出口选择环（服役考核）
+    reportOutcome,
+    outcomeStatus,
+    outcomeSummary,
+    revokeOutcome,
     // 供宿主扩展使用的底层访问（谨慎；宿主一般不需要）
     ready: () => ready(),
     notReady,

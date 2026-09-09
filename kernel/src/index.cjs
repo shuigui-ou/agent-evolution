@@ -25,7 +25,17 @@ const {
   LEVELS,
 } = require('./permission.cjs');
 const { createProbeLedger, SCORES } = require('./probe.cjs');
+const { createOutcomeLedger, transition, STATUSES, OUTCOME_DEFAULTS } = require('./outcome.cjs');
 const { createFeedbackEngine, DOWNWEIGHT_PER_VETO, BLACKLIST_THRESHOLD, DIVERGENCE_THRESHOLD } = require('./feedback.cjs');
+const {
+  createBehaviorLedger,
+  parseCorrection,
+  BEHAVIOR_DIMENSIONS,
+  BEHAVIOR_DIRECTIONS,
+  DEFAULT_WINDOW_SIZE,
+  DEFAULT_MIN_EVIDENCE,
+  DEFAULT_CONFIDENCE,
+} = require('./behavior.cjs');
 const { createAudit, GENESIS } = require('./audit.cjs');
 const { createSnapshotManager, bumpPatch } = require('./snapshot.cjs');
 const { detectInjection, sanitizeForPrompt, RULES } = require('./injection-guard.cjs');
@@ -48,14 +58,18 @@ module.exports = {
   createSnapshotManager,
   createLocalResourceClient,
   createHttpClient,
+  createBehaviorLedger,
+  createOutcomeLedger,
   // 纯函数
   normalizeFingerprint,
   classifySignal,
   aggregate,
+  parseCorrection,
   computeExpectedGain,
   assertContentT4Safe,
   detectInjection,
   sanitizeForPrompt,
+  transition,
   bumpPatch,
   sha256hex,
   shortHash,
@@ -71,6 +85,13 @@ module.exports = {
   SCORES,
   GENESIS,
   RULES,
+  BEHAVIOR_DIMENSIONS,
+  BEHAVIOR_DIRECTIONS,
+  DEFAULT_WINDOW_SIZE,
+  DEFAULT_MIN_EVIDENCE,
+  DEFAULT_CONFIDENCE,
+  STATUSES,
+  OUTCOME_DEFAULTS,
   MET_DOWNWEIGHT,
   DOWNWEIGHT_PER_VETO,
   BLACKLIST_THRESHOLD,

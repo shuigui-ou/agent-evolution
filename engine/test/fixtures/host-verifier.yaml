@@ -1,0 +1,34 @@
+# engine 行为贴合层 · 跨域验证用 host B（software-verifier 域语义副本）
+# 语义对齐真实 ~/.workbuddy/skills/software-verifier/evolution.yaml（六原语 P4、
+# 白名单指向 evolution/pitfalls.json + learnings.jsonl），但 dataDir/knowledge 均
+# 指向本 fixture 隔离目录 —— 验证同一 engine 换域后 behavior 账本照常工作，零污染真实 skill。
+schema: 1
+meta:
+  agent: software-verifier
+  version: 0.1.0
+kernel:
+  dataDir: data/evolution
+  level: auto_report
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]
+  enabled: true
+knowledge:
+  root: data/evolution/knowledge
+  whitelist:
+    - pitfalls.json
+    - learnings.jsonl
+behavior:
+  windowSize: 10
+  minEvidence: 2
+  confidence: 0.5
+objectives:
+  - title: 压制验证失败复现率（同一失败模式不再反复出现）
+    types: [E]
+    weight: 5
+signals:
+  source: result.json
+  pointer: /features
+  triggers: [post-run, manual]
+server:
+  enabled: false

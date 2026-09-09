@@ -55,6 +55,9 @@ probe 回填、report 落盘……其中 90% 与"这个宿主是 ai-novel-studio
 | `signals`                 | object   |    | 信号源声明：`source`(tap/result.json/event)、`pointer`、`triggers`（当前驱动 tapE/事件 API） |
 | `thread.ttlMs`            | int      |    | thread 账本默认生命周期 ms（默认 24h）                                                   |
 | `analyze.intervalMs`      | int      |    | 自动周期批分析间隔 ms（默认 5 分钟）                                                        |
+| `behavior.windowSize`     | int      |    | 行为贴合层：偏好推断滑动窗口（默认 20 条观察）                                                  |
+| `behavior.minEvidence`    | int      |    | 行为贴合层：形成稳定偏好的最少多数票数（默认 3）                                                |
+| `behavior.confidence`     | number   |    | 行为贴合层：多数方向置信度阈值 (0,1]（默认 0.6）                                            |
 | `server.enabled`          | bool     |    | 是否声明 HTTP 端点面（默认 false）                                                      |
 | `server.prefix`           | string   |    | HTTP API 前缀（默认 `/api/evolution`）                                             |
 
@@ -76,6 +79,43 @@ probe 回填、report 落盘……其中 90% 与"这个宿主是 ai-novel-studio
 - 首个 `.jsonl` 条目会被内核选为默认落地面（`paths.defaultSurface`）。
 - 写入 / 读取越过白名单前缀 → 内核硬拒 `PATH_NOT_WHITELISTED`（fail-safe，绝不静默吞）。
 - 目录型白名单（如 `notes`）允许其前缀下非可执行文件；可执行扩展名（.js/.cjs/.py/.sh…）被内核 E4 黑名单拒绝。
+
+### 1.3 behavior 行为贴合层（方向 A，v1 增量）
+
+**解决什么**：让用户体感"越用越懂我"。宿主把**用户对输出的显式纠偏**（"太长了/详细点/直接给结果/先分步确认"）喂给引擎，引擎沉淀成输出风格偏好，返回一段**可注入的行为指引**；宿主在每次任务/回复前拼进上下文即可。与 knowledge 的边界：knowledge 修"同类任务错误"，behavior 调"输出风格"。
+
+**接入**（宿主侧，不改宿主本体）：
+
+```js
+// 1. 用户输出被纠偏时上报（两种入参任选）
+handle.tapBehavior({ text: '太长了，简洁一点' });          // 文本启发式解析
+handle.tapBehavior({ dimension: 'verbosity', direction: 'less' }); // 精确上报
+// 2. 每次任务/回复前取指引，拼进 system prompt
+const g = handle.behaviorGuidance();  // { ok, text, active }
+if (g.text) prompt += '\n' + g.text;
+// 3. （可选）查看/清空偏好
+handle.behaviorProfile();             // 全部 4 维度实时偏好
+handle.behaviorReset('verbosity');    // user 来源清空
+```
+
+**受控枚举**（安全边界，不接受自由文本维度）：
+
+| dimension | label | more（措辞） | less（措辞） |
+| --- | --- | --- | --- |
+| `verbosity` | 输出篇幅 | 更详尽 | 更简洁 |
+| `detail` | 论据与细节 | 更多细节/依据 | 更少细节/要点为主 |
+| `proactivity` | 主动性 | 更主动多走一步 | 更克制只答所问 |
+| `pace` | 节奏 | 更分步、逐步确认 | 更直接给结果 |
+
+**安全保证**：
+- 维度/方向受控枚举，非法输入抛 `BEHAVIOR_INVALID_DIMENSION / BEHAVIOR_INVALID_DIRECTION`（engine 层转 `{ok:false, reason:'kernel_error'}` fail-open）；
+- 注入文本由模板 + 受控措辞生成，**绝不拼接用户原文**（原文只存档/审计）→ 无注入面；
+- append-only 账本 `<dataDir>/behavior/observations.jsonl` + 审计挂钩（`BEHAVIOR_TAPPED`）；
+- kill-switch 后行为层不可写；不改宿主本体/权限/目标档位。
+
+**偏好推断规则**：每维度取最近 `behavior.windowSize` 条观察，多数方向票数 ≥ `behavior.minEvidence` 且占比 ≥ `behavior.confidence` → 该维度稳定（`stable=true`），进入 guidance。
+
+**向后兼容**：`behavior` 段整体可选。旧 evolution.yaml 不写该段 → 引擎按缺省参数装配（windowSize=20/minEvidence=3/confidence=0.6），其余行为零变化。
 
 ---
 

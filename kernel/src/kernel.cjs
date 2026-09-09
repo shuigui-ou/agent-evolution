@@ -32,7 +32,9 @@ const { createObjectiveStack, MAX_WEIGHT } = require('./objective.cjs');
 const { createCandidatePool, L2_UNITS } = require('./candidates.cjs');
 const { createPermissionKnob, assertContentT4Safe, LEVELS } = require('./permission.cjs');
 const { createProbeLedger, SCORES } = require('./probe.cjs');
+const { createOutcomeLedger } = require('./outcome.cjs');
 const { createFeedbackEngine } = require('./feedback.cjs');
+const { createBehaviorLedger, parseCorrection } = require('./behavior.cjs');
 const { createAudit } = require('./audit.cjs');
 const { createSnapshotManager } = require('./snapshot.cjs');
 const { detectInjection, sanitizeForPrompt } = require('./injection-guard.cjs');
@@ -108,6 +110,7 @@ function resolveTier(primitives = []) {
  * @param {number} [opts.dailyLimit=20]
  * @param {object|null} [opts.resources] - 资源层客户端（本地文件适配器/HTTP stub）
  * @param {Function|null} [opts.candidateGenerator] - async (signal)=>candidate 输入数组（本地候选生成）
+ * @param {object} [opts.behavior] - 行为贴合层配置 { windowSize, minEvidence, confidence }
  */
 function createKernel({
   dataDir = 'runtime',
@@ -118,6 +121,7 @@ function createKernel({
   dailyLimit = 20,
   resources = null,
   candidateGenerator = null,
+  behavior = null,
 } = {}) {
   const primitives = host.primitives || PRIMITIVES.slice();
   const tier = resolveTier(primitives);
@@ -158,6 +162,10 @@ function createKernel({
   });
   const candidatePool = createCandidatePool({ feedback });
   const permission = createPermissionKnob({ level, dailyLimit, audit });
+  // 行为贴合层（方向 A）：独立账本，用户显式纠偏 → 输出风格偏好；kill 后不可写
+  const behaviorLedger = createBehaviorLedger({ dataDir, audit, ...(behavior || {}) });
+  // 出口选择环（经验 lane）：落地条目服役考核账本 —— 注入签发 + 同因再犯自动证伪
+  const outcomeLedger = createOutcomeLedger({ dataDir, lane: 'experience', audit });
 
   // ---- 内核状态 ----
   let killed = false; // kill-switch：一键降级 P0，agent 回到纯知识面文件模式
@@ -226,6 +234,35 @@ function createKernel({
         taskId: wrapped.task_id,
         payload: wrapped.payload,
       });
+      // 出口选择环自动关联：该 fp 是否命中一条已知经验？
+      //  active/strengthened + 已签发 → 注入后同因再犯 → 自动 refuted（注入没拦住）
+      //  decayed 冷却期同因再犯 → 继续累计证伪（3 次 → retired，彻底停用）
+      const fp = String((event.payload && event.payload.fingerprint) || '');
+      if (fp) {
+        const exp = experienceCache.get(fp);
+        if (exp) {
+          const id = String(exp.id || exp.fingerprint || '');
+          if (id) {
+            const st = outcomeLedger.stateOf(id);
+            let note = '';
+            if (st.status === 'decayed') {
+              outcomeLedger.record(id, 'refuted', { source: 'auto', note: 'continued_failure_while_cooled', fingerprint: fp });
+              note = 'refuted_continued';
+            } else if (st.status === 'active' || st.status === 'strengthened') {
+              const auto = outcomeLedger.autoRefute(id, { note: 'recurrence_after_injection', fingerprint: fp });
+              if (auto) note = 'refuted_after_injection';
+            }
+            if (note) {
+              audit.append('OUTCOME_AUTO_REFUTED', {
+                experience_id: id,
+                fingerprint: fp,
+                note,
+                status: outcomeLedger.stateOf(id).status,
+              });
+            }
+          }
+        }
+      }
     }
     audit.append('EVENT_TAP', { kind: wrapped.kind, session_id: wrapped.session_id });
     return { accepted: true, reason: 'queued' };
@@ -246,7 +283,14 @@ function createKernel({
     const fp = require('./signals.cjs').normalizeFingerprint(text);
     const hit = experienceCache.get(fp);
     if (!hit) return null;
+    // 出口选择环：被考核停用（decayed/retired）的经验不进注入面
+    if (!outcomeLedger.injectable(hit.id)) {
+      audit.append('OUTCOME_BLOCKED', { fingerprint: fp, experience_id: hit.id, reason: 'not_injectable' });
+      return null;
+    }
     if (Date.now() - start > 50) return null; // 超时视为 null（规范预算约束）
+    // 登记一次注入签发（开观察窗口：此后同因再犯 → 自动 refuted）
+    outcomeLedger.markIssued(hit.id, { fingerprint: fp });
     audit.append('PRE_ACTION_HIT', { fingerprint: fp, experience_id: hit.id });
     return { kind: 'inject_guidance', text: sanitizeForPrompt(hit.content) };
   }
@@ -848,10 +892,113 @@ function createKernel({
         .map((r) => ({ id: r.experience_id || r.id, fingerprint: r.fingerprint, content: r.content }));
     }
     for (const it of items) {
-      if (it.fingerprint) experienceCache.set(it.fingerprint, it);
+      if (!it.fingerprint) continue;
+      const expId = String(it.id || it.fingerprint);
+      // 出口选择环：已被考核停用的经验不装载（decayed/retired 跨重启仍不生效）
+      if (!outcomeLedger.injectable(expId)) {
+        audit.append('EXPERIENCE_SKIPPED_OUTCOME', { experience_id: expId, fingerprint: it.fingerprint });
+        continue;
+      }
+      experienceCache.set(it.fingerprint, it);
     }
-    audit.append('EXPERIENCES_LOADED', { count: items.length });
+    audit.append('EXPERIENCES_LOADED', { count: items.length, served: experienceCache.size });
     return items.length;
+  }
+
+  // =====================================================================
+  // 行为贴合层（方向 A，独立于经验知识链）
+  // =====================================================================
+  /**
+   * 记录一次用户行为纠偏观察（append-only 账本 + 审计；kill 后拒绝写）。
+   * @param {object} obs - { dimension, direction, text?, source? }
+   * @returns {object} 观察记录
+   * @throws KernelError BEHAVIOR_INVALID_DIMENSION / BEHAVIOR_INVALID_DIRECTION
+   */
+  function tapBehavior(obs = {}) {
+    assertAlive();
+    return behaviorLedger.record(obs);
+  }
+
+  /** 实时偏好推断（只读，不落盘） */
+  function behaviorProfile() {
+    return behaviorLedger.profile();
+  }
+
+  /** 生成可注入的行为指引（模板文本；无稳定偏好时 text=''） */
+  function behaviorGuidance() {
+    return behaviorLedger.guidance();
+  }
+
+  /**
+   * 清空某维度/全部行为观察（仅 user 来源）
+   */
+  function behaviorReset(dimension = '', opts = {}) {
+    assertAlive();
+    return behaviorLedger.reset(dimension, opts);
+  }
+
+  // =====================================================================
+  // 出口选择环（统一考核入口：experience / behavior 两 lane）
+  // 候选裁决环管"准入"，本环管"服役考核"——注入签发 + 同因再犯/异维生存自动判定，
+  // 宿主显式上报 reportOutcome 仅作可选增强。
+  // =====================================================================
+  /**
+   * 记一次条目考核结论。
+   * @param {object} p
+   * @param {string} p.lane - 'experience'（knowledge 经验，key=experience_id）| 'behavior'（偏好对，key='dim:dir'）
+   * @param {string} p.key
+   * @param {string} p.verdict - 'confirmed' | 'refuted'
+   * @param {string} [p.source='host']
+   * @returns {object} {lane, key, verdict, state}
+   */
+  function reportOutcome({ lane = 'experience', key = '', verdict = '', source = 'host', note = '' } = {}) {
+    assertAlive();
+    if (!['experience', 'behavior'].includes(lane)) {
+      throw new KernelError('OUTCOME_INVALID_LANE', `考核 lane 非法：${lane}`, { lane });
+    }
+    if (!['confirmed', 'refuted'].includes(String(verdict))) {
+      throw new KernelError('OUTCOME_INVALID_VERDICT', `考核结论非法：${verdict}`, { verdict });
+    }
+    const rec = lane === 'behavior'
+      ? behaviorLedger.reportOutcome(String(key), String(verdict), { source: source || 'host', note })
+      : outcomeLedger.record(String(key), String(verdict), { source: source || 'host', note });
+    return { lane, key: rec.key, verdict: rec.verdict, state: rec.state };
+  }
+
+  /** 单条目考核状态（只读；无记录返回 active 0/0） */
+  function outcomeStatus({ lane = 'experience', key = '' } = {}) {
+    const k = String(key);
+    const st = lane === 'behavior'
+      ? behaviorLedger.pairStates().find((x) => x.key === k)
+      : outcomeLedger.stateOf(k);
+    if (st) return { lane, key: k, confirmed: st.confirmed, refuted: st.refuted, status: st.status };
+    return { lane, key: k, confirmed: 0, refuted: 0, status: 'active' };
+  }
+
+  /** 考核汇总（两 lane 状态分布） */
+  function outcomeSummary() {
+    const exp = outcomeLedger.summary();
+    const pairs = behaviorLedger.pairStates();
+    const byStatus = { active: 0, strengthened: 0, decayed: 0, retired: 0 };
+    for (const s of pairs) byStatus[s.status] = (byStatus[s.status] || 0) + 1;
+    return {
+      experience: exp,
+      behavior: { lane: 'behavior', total: pairs.length, byStatus },
+      file: { experience: outcomeLedger.file, behavior: behaviorLedger.files.outcomeFile },
+    };
+  }
+
+  /** 手动复活（仅 user 来源；计数清零；经验 lane 复活后重载回注入缓存） */
+  function revokeOutcome({ lane = 'experience', key = '' } = {}) {
+    assertAlive();
+    const k = String(key);
+    if (lane === 'behavior') {
+      const [dim, dir] = k.split(':');
+      const r = behaviorLedger.revokePair(dim, dir);
+      return { lane, key: r.key, revoked: true, state: r.state };
+    }
+    const r = outcomeLedger.revoke(k, { source: 'user' });
+    return { lane, key: r.key, revoked: true, state: r.state };
   }
 
   // =====================================================================
@@ -896,6 +1043,16 @@ function createKernel({
     updateObjective,
     divergenceSummary,
     alignmentReviews: listAlignmentReviews,
+    // 行为贴合层（方向 A）
+    tapBehavior,
+    behaviorProfile,
+    behaviorGuidance,
+    behaviorReset,
+    // 出口选择环（服役考核）
+    reportOutcome,
+    outcomeStatus,
+    outcomeSummary,
+    revokeOutcome,
     // 透传子系统（宿主/测试可检查内部状态）
     subsystems: {
       ledger,
@@ -906,6 +1063,8 @@ function createKernel({
       candidatePool,
       permission,
       feedback,
+      behavior: behaviorLedger,
+      outcome: outcomeLedger,
       signals: { classifySignal, aggregate },
     },
     // 状态读取

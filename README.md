@@ -17,9 +17,10 @@
 
 | 目录 / 文件 | 说明 |
 |---|---|
-| `kernel/` | **evolution-kernel v1.1.0**（零依赖 CommonJS）：进化内核运行时。八步主状态机（错误→记录→定时分析→对比他解→最优→权限→落地→周期再评估）；承诺账本（ledger）+ 审计链（audit）；快照/回滚；权限档位（T4 铁律：*行为可进化，权限不可进化*）；六原语 P0–P4 分级。入口 `kernel/src/index.cjs`。 |
-| `engine/` | **evolution-engine v1.0.0**（零依赖 CommonJS）：共享引擎加载器。读取 `evolution.yaml` → schema 校验 → 定位并装配内核 → 返回统一 `handle`。入口 `engine/engine.cjs`。 |
+| `kernel/` | **evolution-kernel v1.3.0**（零依赖 CommonJS）：进化内核运行时。八步主状态机（错误→记录→定时分析→对比他解→最优→权限→落地→周期再评估）；承诺账本（ledger）+ 审计链（audit）；快照/回滚；权限档位（T4 铁律：*行为可进化，权限不可进化*）；六原语 P0–P4 分级；**行为贴合层**（从用户显式纠偏提炼输出风格偏好）；**出口选择环**（条目服役考核：注入签发 → 同因再犯自动衰减/停用，见 §出口选择环）。入口 `kernel/src/index.cjs`。 |
+| `engine/` | **evolution-engine v1.2.0**（零依赖 CommonJS）：共享引擎加载器。读取 `evolution.yaml` → schema 校验 → 定位并装配内核 → 返回统一 `handle`（含 `tapBehavior` / `behaviorGuidance` / `reportOutcome` / `outcomeSummary` 等）。入口 `engine/engine.cjs`。 |
 | `docs/EVOLUTION-YAML.md` | **evolution.yaml v1 契约**：接入的唯一必读文档。字段表、完整示例、错误码与降级语义。 |
+| `docs/EVOLUTION-SCOPE.md` | **范围定义文档**：对象=血统 / 范围=任务→输出→验收回路 / 成功=出口被选择改善；出口选择环状态机、自动信号规则、与候选裁决环的职责划分。 |
 | `docs/EVOLUTION-KERNEL-SPEC.md` | 内核规范：八步链路、六原语分级、T4 铁律、权限档位定义。 |
 | `src/` | **AED 守护进程主线**（Agent Evolution Daemon）：`daemon` / `cli` / `ingest` / `evidence` / `evolve` / `external` / `credit` / `eval` / `resources` / `assessment` / `security` / `store` 等子模块 + `schema/` JSON Schema。 |
 | `bin/` | AED CLI（`aed`）、资源服务（`aed-resource`）、回溯评估（`evolution-eval`）。 |
@@ -85,19 +86,76 @@ module.exports = {
 
 ---
 
+## 行为贴合层（让用户体感"越用越懂我"）
+
+> v1.2.0 新增（方向 A）。内核不再只修"任务错误"——它还能学"输出风格"。
+
+宿主把**用户对输出的显式纠偏**喂给引擎，引擎沉淀成输出风格偏好并返回可注入指引：
+
+```js
+// 1. 用户说"太长了 / 详细点 / 直接给结果 / 先分步确认"时上报（文本启发式 或 精确上报）
+handle.tapBehavior({ text: '太长了，简洁一点' });
+handle.tapBehavior({ dimension: 'verbosity', direction: 'less' }); // 受控枚举
+// 2. 每次任务/回复前取指引拼进 system prompt
+const g = handle.behaviorGuidance();   // { ok, text, active }
+if (g.text) prompt += '\n' + g.text;   // 模板文本，绝不拼接用户原文
+// 3. 查看/清空偏好
+handle.behaviorProfile();              // verbosity/detail/proactivity/pace × more/less
+handle.behaviorReset('verbosity');     // user 来源清空
+```
+
+受控枚举（安全边界，不接受自由文本维度）：`verbosity`（篇幅）/ `detail`（论据）/ `proactivity`（主动）/ `pace`（节奏），方向 `more|less`。偏好形成需同向 ≥`behavior.minEvidence`（默认 3）且置信 ≥`behavior.confidence`（默认 0.6），窗口 `behavior.windowSize`（默认 20）。`behavior` 段可选，旧 yaml 零影响。详见 [`docs/EVOLUTION-YAML.md`](docs/EVOLUTION-YAML.md) §1.3。
+
+---
+
+## 出口选择环（让"进化"名副其实：有差分存活）
+
+> v1.3.0（kernel）/ v1.2.0（engine）新增。范围定义见 [`docs/EVOLUTION-SCOPE.md`](docs/EVOLUTION-SCOPE.md)。
+
+行为贴合层解决"越用越懂我"（前馈 shaping），出口选择环解决"错了自动停用、对了自动强化"
+（反馈 selection）——没有后者，账本 append-only，落地与注入只是累积（有变异、无差分存活），
+严格说不是进化。宿主**零新增代码**：自动信号由内核从事件流推导。
+
+```js
+// 自动发生（宿主无需调用）：
+//   preAction 注入经验后，同 fingerprint 错误再 tap        → 该经验 auto refuted
+//   behaviorGuidance 签发后，同对再纠偏                    → 该偏好对 auto refuted
+//   behaviorGuidance 签发后，连续 survivalWindow 条异维纠偏 → 该偏好对 auto confirmed
+// 条目状态：active →(refuted≥2) decayed（冷却停注）→(refuted≥3) retired（停用、审计可查）
+//          active →(confirmed≥3) strengthened；retired 可由 user revoke 复活（计数清零）
+
+// 可选增强（显式上报考核结论 / 只读视图 / 复活）
+handle.reportOutcome({ lane: 'experience', key: 'exp-1', verdict: 'confirmed' }); // 或 'refuted'
+handle.outcomeStatus({ lane: 'behavior', key: 'verbosity:less' }); // {status, confirmed, refuted}
+handle.outcomeSummary();  // 两 lane 状态分布
+handle.revokeOutcome({ lane: 'experience', key: 'exp-1' }); // 仅 user 来源
+```
+
+T4 不变：outcome 只作用于条目状态（注入面/指引面），永不触碰权限档位与目标。详见
+[`docs/EVOLUTION-SCOPE.md`](docs/EVOLUTION-SCOPE.md)。
+
+---
+
 ## 测试矩阵
 
 零第三方依赖，直接使用 Node 内置 test runner：
 
 | 组件 | 命令 | 结果 |
 |---|---|---|
-| evolution-kernel | `cd kernel && node --test test/*.test.cjs` | ✅ 47/47 |
-| evolution-engine | `cd engine && node --test test/*.test.cjs` | ✅ 10/10 |
+| evolution-kernel | `cd kernel && node --test test/*.test.cjs` | ✅ 61/61 |
+| evolution-engine | `cd engine && node --test test/*.test.cjs` | ✅ 25/25 |
 
 ```text
-kernel : # tests 47  # pass 47  # fail 0
-engine : # tests 10  # pass 10  # fail 0
+kernel : # tests 61  # pass 61  # fail 0
+engine : # tests 25  # pass 25  # fail 0
 ```
+
+> engine 25 例含 **4 例跨域通用性验证**（`behavior-domain.test.cjs`）+ **3 例出口选择环**
+> （`behavior-outcome.test.cjs`，verifier 域闭环：同对纠偏反复 → decayed 停注 → retired →
+> revoke 复活）。同一份 engine 分别装配创作域（novel）与验证域（verifier，语义对齐
+> software-verifier Host B 契约），双域并存 dataDir 隔离、账本不串；验证域走受控通道
+> `tapBehavior({dimension,direction})` 即可形成偏好（不依赖文本词表），证明 behavior
+> 账本机制域无关。
 
 ---
 
