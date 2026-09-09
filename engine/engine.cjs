@@ -26,7 +26,7 @@ const { EngineError } = require('./errors.cjs');
 const yamlMin = require('./yaml-min.cjs');
 
 /** 引擎版本 */
-const ENGINE_VERSION = '1.2.0';
+const ENGINE_VERSION = '1.3.0';
 
 /** yaml schema 版本（evolution.yaml 顶层 schema 字段） */
 const SCHEMA_VERSION = 1;

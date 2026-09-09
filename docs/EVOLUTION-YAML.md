@@ -1,6 +1,7 @@
 # evolution.yaml v1 契约 —— 数据即接入
 
 > 版本：v1 ｜ 状态：定稿 ｜ 2026-09-08 ｜ 配套代码：`agent-evolution/engine/engine.cjs`（共享引擎加载器）  
+> 配套版本：evolution-kernel **v1.4.0** / evolution-engine **v1.3.0**（本契约同步：outcome 阈值 yaml 可配 + behavior.keywords 域词表注入 + audit 并发防分叉）  
 > 目的：把 skill / host 接入进化内核的方式，从「每个 skill 写一套接线代码」收敛为  
 > **共享 engine + 一份声明式 evolution.yaml = 数据即接入**。
 
@@ -309,7 +310,7 @@ server:
 
 - 共享引擎：`agent-evolution/engine/engine.cjs`（零依赖 CJS，可整体复制到 host）
 - 极简 YAML 解析：`engine/yaml-min.cjs`（零依赖；不支持锚点/多行块等复杂特性，见文件头）
-- 引擎测试：`agent-evolution/engine/test/engine.test.cjs`（10 用例全绿）
+- 引擎测试：`agent-evolution/engine/test/`（kernel 65 例 + engine 29 例全绿；含 outcome 阈值 / behavior.keywords 词表注入 / audit 并发防分叉回归）
 - Host A 收敛样板：`ai-novel-studio/src/evolution.yaml` + `src/evolution.cjs` 薄适配  
   （vendored engine：`ai-novel-studio/lib/evolution-engine/`）
 - Host B 声明式接入：`software-verifier/evolution.yaml`（skill 根，见 §7 取舍）
