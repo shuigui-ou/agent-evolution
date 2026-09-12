@@ -1,0 +1,40 @@
+# agent-evolution 通用接入模板（turnkey 脚手架）
+# 复制到任意项目根，改 meta.agent 与 knowledge.whitelist 即可。内核/引擎解析顺序见 evolution-host.cjs。
+schema: 1
+meta:
+  agent: your-project          # ← 改成你的项目名（进审计/agentId）
+  version: 0.1.0
+kernel:
+  dataDir: .evolution          # 运行期数据目录（相对项目根；建议 gitignore）
+  level: auto_report           # 自动落地 + 报告；fail-open 守住
+  audit: true
+  dailyLimit: 20
+  primitives: [tap, pre_action, interrupt, write, checkpoint, audit]  # → resolveTier P4
+  enabled: true
+  # kernelRoot 指向 vendored 内核目录（推荐）；留空则用引擎内置共享内核
+  kernelRoot: lib/evolution-kernel/src
+  configFile: config.json      # 宿主可在 config.json 的 evolution.enabled/level 运行覆盖
+knowledge:
+  root: .evolution/knowledge
+  whitelist:                   # 受管知识面（越权写/读均被拒）；首个 .jsonl 为默认落地面
+    - pitfalls.jsonl
+    - runbook.md
+    - learnings.jsonl
+seeds:
+  source: seeds/common-pitfalls.jsonl   # 7 条通用工程坑种子，接入即获得即时 playbook
+  fileName: common-pitfalls.jsonl
+objectives:
+  - title: 压制重复出现的技术错误（git/网络/打包/权限/端口）
+    types: [E]
+    weight: 5
+  - title: 长任务不再悬挂（I 型人审）
+    types: [I]
+    weight: 3
+signals:
+  source: tap                  # E 类信号来自宿主 tapError/tapE()
+  triggers: [post-run, http, manual]
+analyze:
+  intervalMs: 300000           # 5 分钟自动跑一轮（宿主无需写 cron）；engine.startAutoAnalyze 驱动
+server:
+  enabled: false               # 如需 HTTP 面再开 true
+  prefix: /api/evolution
