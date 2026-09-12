@@ -22,12 +22,22 @@ const SIGNAL_TYPES = Object.freeze(['E', 'G', 'P', 'I']);
 
 /**
  * 归一化 fingerprint：把易变细节抹掉，只留"错误骨架"
- * 步骤：去 UUID → 去文件/URL 路径 → 去数字 → 去标点噪声 → 折叠空白 → 小写 → sha256 前 16 位
+ * 步骤：剥调用栈帧 → 去 UUID → 去文件/URL 路径 → 去数字 → 折叠空白 → 小写 → sha256 前 16 位
+ *
+ * 跨宿主一致性（关键）：`detail` 通常是 Error.stack，含函数名/文件结构/帧数——
+ * 这些**随宿主不同而不同**；若不剥离，同一错误在两个宿主上会得到不同指纹，
+ * 共享知识库就永远命中不了。故先整体剥离栈帧，只保留宿主无关的"错误骨架"。
  * @param {string} text - 原始错误/落差描述
  * @returns {string} 16 位 hex 指纹
  */
 function normalizeFingerprint(text) {
   let s = String(text);
+  // 1) 调用栈帧（Node/V8："    at fn (path:1:2)" / "    at async foo"）
+  s = s.replace(/(?:^|[\r\n])[ \t]*at\s+[^\r\n]*/g, ' ');
+  // 2) Playwright "Call log:" 下的 "  - navigating to ..." 之类，同样对齐为宿主噪声
+  s = s.replace(/(?:^|[\r\n])[ \t]*-\s+[^\r\n]*/g, ' ');
+  // 3) 残留的 file:line:col
+  s = s.replace(/\S+:\d+:\d+/g, ' <loc> ');
   s = s.replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, ' <uuid> ');
   // Windows 盘符路径 与 POSIX 绝对路径
   s = s.replace(/[A-Za-z]:\\[^\s"'<>|*?]+/g, ' <path> ');
